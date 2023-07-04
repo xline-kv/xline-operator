@@ -1,0 +1,14 @@
+[package]
+name = "deploy-operator"
+version = "0.1.0"
+edition = "2021"
+authors = ["DatenLord <dev@datenlord.io>"]
+description = "The xline-operator is a powerful tool designed to automate the process of bootstrapping, monitoring, snapshotting, and recovering an xline cluster on Kubernetes."
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/xline-kv/xline-operator"
+categories = ["operator"]
+keywords = ["kubernates", "xline", "operator"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
