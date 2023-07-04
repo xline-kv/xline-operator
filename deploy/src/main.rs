@@ -136,4 +136,17 @@
     clippy::multiple_crate_versions, // caused by the dependency, can't be fixed
 )]
 
-fn main() {}
+use anyhow::Result;
+use clap::Parser;
+use deploy_operator::config::Config;
+use deploy_operator::operator::Operator;
+use tracing::debug;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let config = Config::parse();
+    debug!("{:?}", config);
+    Operator::new(config).run().await
+}
