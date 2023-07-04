@@ -135,3 +135,24 @@
     clippy::panic, // allow debug_assert, panic in production code
     clippy::multiple_crate_versions, // caused by the dependency, can't be fixed
 )]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::indexing_slicing,
+        unused_results,
+        clippy::unwrap_used,
+        clippy::as_conversions,
+        clippy::shadow_unrelated,
+        clippy::integer_arithmetic,
+        clippy::let_underscore_untyped,
+    )
+)]
+
+/// Deploy operator config
+pub mod config;
+/// Deploy controller
+mod controller;
+/// Custom resource definition
+mod crd;
+/// Deploy operator
+pub mod operator;
