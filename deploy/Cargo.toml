@@ -6,16 +6,15 @@ authors = ["DatenLord <dev@datenlord.io>"]
 description = "The xline-operator is a powerful tool designed to automate the process of bootstrapping, monitoring, snapshotting, and recovering an xline cluster on Kubernetes."
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/xline-kv/xline-operator"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/deploy"
 categories = ["operator"]
-keywords = ["kubernates", "xline", "operator"]
+keywords = ["kubernetes", "xline", "operator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.71"
 clap = { version = "4.3.4", features = ["derive"] }
 futures = "0.3.28"
-garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }
 k8s-openapi = { version = "0.18.0", features = ["v1_26", "schemars"] }
 kube = { version = "0.83.0", features = ["runtime", "derive"] }
 schemars = "0.8.6"
@@ -30,3 +29,6 @@ tokio = { version = "1.0", features = [
 ] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+
+[dev-dependencies]
+garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }

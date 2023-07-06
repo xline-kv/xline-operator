@@ -6,9 +6,9 @@ authors = ["DatenLord <dev@datenlord.io>"]
 description = "The xline-operator is a powerful tool designed to automate the process of bootstrapping, monitoring, snapshotting, and recovering an xline cluster on Kubernetes."
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/xline-kv/xline-operator"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/sidecar"
 categories = ["operator"]
-keywords = ["kubernates", "xline", "operator"]
+keywords = ["kubernetes", "xline", "operator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
