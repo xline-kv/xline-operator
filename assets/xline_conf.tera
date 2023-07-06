@@ -1,0 +1,17 @@
+# Required
+
+[cluster]
+name = "{{ name }}"
+is_leader = {{ is_leader }}
+
+[cluster.members]{% for name, addr in members %}
+{{ name }} = "{{ addr }}"
+{%- endfor %}
+
+[storage]
+engine = "{{ storage_engine }}"
+data_dir = "{{ data_dir }}"
+
+# Additional
+
+{{ additional }}

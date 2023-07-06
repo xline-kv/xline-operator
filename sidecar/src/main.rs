@@ -37,7 +37,6 @@
     unused_qualifications,
     unused_results,
     variant_size_differences,
-
     warnings, // treat all warnings as errors
 
     clippy::all,
@@ -136,4 +135,185 @@
     clippy::multiple_crate_versions, // caused by the dependency, can't be fixed
 )]
 
-fn main() {}
+use std::collections::HashMap;
+use std::fs::write;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use anyhow::{anyhow, Result};
+use clap::{Parser, Subcommand};
+use tera::{Context, Tera};
+use tracing::debug;
+
+use xline_sidecar::config::{Backup, Config};
+use xline_sidecar::operator::Operator;
+
+/// Command line interface
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// The name of this node
+    #[arg(long)]
+    name: String, // used in xline and deployment operator to identify this node
+
+    /// Sub commands
+    #[command(subcommand)]
+    command: Commands,
+}
+
+/// Sub commands
+#[allow(variant_size_differences)] // required by clap
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Run sidecar operator
+    Run {
+        /// Check health interval, default 20 [unit: seconds]
+        #[arg(long, default_value = "20")]
+        check_interval: u64,
+        /// Enable backup, choose a storage type, one of ['s3', 'pv']
+        #[arg(long)]
+        backup_type: Option<String>,
+        /// Specify the s3 storage path
+        #[arg(long)]
+        s3_path: Option<String>,
+        /// Specify the s3 secret
+        #[arg(long)]
+        s3_secret: Option<String>,
+        /// Specify the k8s persist volume mounted path
+        #[arg(long)]
+        pv_path: Option<PathBuf>,
+        /// Sidecar operators
+        #[arg(long, value_parser = parse_members)]
+        members: HashMap<String, String>,
+    },
+    /// Generate xline configuration file
+    Gen {
+        /// The file path where the xline kvserver reads configs
+        #[arg(long)]
+        path: PathBuf,
+        /// Storage engine used in xline
+        #[arg(long)]
+        storage_engine: String,
+        /// The directory path contains xline kvserver data
+        #[arg(long)]
+        data_dir: PathBuf,
+        /// Whether this node is leader or not
+        #[arg(long)]
+        is_leader: bool,
+        /// Xline cluster members
+        #[arg(long, value_parser = parse_members)]
+        members: HashMap<String, String>,
+        /// Additional arguments [format: JSON]
+        #[arg(long)]
+        additional: Option<String>,
+    },
+}
+
+/// parse members from string
+/// # Errors
+/// Return error when pass wrong args
+#[inline]
+pub fn parse_members(s: &str) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    for pair in s.split(',') {
+        if let Some((id, addr)) = pair.split_once('=') {
+            let _ignore = map.insert(id.to_owned(), addr.to_owned());
+        } else {
+            return Err(anyhow!(
+                "parse the pair '{}' error, expect '<id>=<addr>'",
+                pair
+            ));
+        }
+    }
+    Ok(map)
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let cli = Cli::parse();
+    debug!("{:?}", cli);
+
+    match cli.command {
+        Commands::Run {
+            check_interval,
+            backup_type,
+            s3_path,
+            s3_secret,
+            pv_path,
+            members,
+        } => {
+            let backup = backup_type
+                .map(|kind| match kind.as_str() {
+                    "s3" => Ok(Backup::S3 {
+                        path: s3_path.ok_or(anyhow!("please specify s3_path"))?,
+                        secret: s3_secret.ok_or(anyhow!("please specify s3_secret"))?,
+                    }),
+                    "pv" => Ok(Backup::PV {
+                        path: pv_path.ok_or(anyhow!("please specify pv_path"))?,
+                    }),
+                    _ => Err(anyhow!(
+                        "unknown backup storage type, please choose one of [s3, pv]"
+                    )),
+                })
+                .transpose()?;
+            let config = Config::new(
+                cli.name,
+                members,
+                Duration::from_secs(check_interval),
+                backup,
+            );
+            Operator::new(config).run().await
+        }
+        Commands::Gen {
+            path,
+            storage_engine,
+            data_dir,
+            is_leader,
+            members,
+            additional,
+        } => generate_xline_config(
+            &path,
+            &cli.name,
+            &storage_engine,
+            &data_dir,
+            is_leader,
+            &members,
+            &additional,
+        ),
+    }
+}
+
+/// Xline config template
+pub static XLINE_CONF: &str = include_str!("../../assets/xline_conf.tera");
+
+/// Generate xline config
+fn generate_xline_config(
+    path: &Path,
+    name: &str,
+    storage_engine: &str,
+    data_dir: &Path,
+    is_leader: bool,
+    members: &HashMap<String, String>,
+    additional: &Option<String>,
+) -> Result<()> {
+    let mut ctx = Context::new();
+    ctx.insert("name", name);
+    ctx.insert("is_leader", &is_leader);
+    ctx.insert("members", members);
+    ctx.insert("storage_engine", storage_engine);
+    ctx.insert("data_dir", data_dir);
+    let additional = if let Some(json) = additional.as_deref() {
+        let value: serde_json::Value = serde_json::from_str(json)?;
+        toml::to_string_pretty(&value)?
+    } else {
+        String::new()
+    };
+    ctx.insert("additional", &additional);
+
+    let conf = Tera::one_off(XLINE_CONF, &ctx, false)?;
+    debug!("generate config: \n{}", conf);
+    write(path, conf)?;
+    Ok(())
+}
