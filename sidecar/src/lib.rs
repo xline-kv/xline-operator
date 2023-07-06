@@ -147,3 +147,10 @@
         clippy::let_underscore_untyped,
     )
 )]
+
+/// Sidecar operator config
+pub mod config;
+/// Sidecar operator controller
+mod controller;
+/// Sidecar operator
+pub mod operator;
