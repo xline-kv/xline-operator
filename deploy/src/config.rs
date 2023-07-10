@@ -17,4 +17,7 @@ pub struct Config {
     /// Whether to create CRD regardless of current version on k8s
     #[arg(long, default_value = "false")]
     pub create_crd: bool,
+    /// Force reconcile interval, default 600s [unit: second]
+    #[arg(long, default_value = "600")]
+    pub reconcile_interval: u64,
 }

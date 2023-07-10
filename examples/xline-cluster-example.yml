@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: xline-backup-pv
+spec:
+  storageClassName: backup
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+---
+apiVersion: xlineoperator.datenlord.io/v1
+kind: XlineCluster
+metadata:
+  name: my-xline-cluster
+spec:
+  size: 5
+  backup:
+    cron: "*/15 * * * *"
+    pvc:
+      metadata:
+        name: my-pvc
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: backup
+        resources:
+          requests:
+            storage: 1Gi
+  container:
+    image: "datenlord/xline"
+    name: "my-xline"
+    ports:
+      - containerPort: 2379
+        name: grpc
