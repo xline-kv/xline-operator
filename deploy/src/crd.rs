@@ -11,6 +11,8 @@ use schemars::JsonSchema;
 
 /// Current CRD `XineCluster` version
 pub(crate) type Cluster = v1::Cluster;
+/// Current CRD Backup Storage Spec
+pub(crate) type StorageSpec = v1::StorageSpec;
 
 // The `CustomResource` macro generates a struct `Cluster` that does not pass the clippy lint.
 #[allow(clippy::str_to_string)]
@@ -37,6 +39,7 @@ mod v1 {
         shortname = "xc",
         scale = r#"{"specReplicasPath":".spec.size", "statusReplicasPath":".status.size"}"#,
         printcolumn = r#"{"name":"Size", "type":"string", "description":"The cluster size", "jsonPath":".spec.size"}"#,
+        printcolumn = r#"{"name":"Available", "type":"string", "description":"The available amount", "jsonPath":".status.available"}"#,
         printcolumn = r#"{"name":"Backup Cron", "type":"string", "description":"The cron spec defining the interval a backup CronJob is run", "jsonPath":".spec.backup.cron"}"#,
         printcolumn = r#"{"name":"Age", "type":"date", "description":"The cluster age", "jsonPath":".metadata.creationTimestamp"}"#
     )]
@@ -44,7 +47,7 @@ mod v1 {
         /// Size of the xline cluster, less than 3 is not allowed
         #[cfg_attr(test, garde(range(min = 3)))]
         #[schemars(range(min = 3))]
-        pub(crate) size: usize,
+        pub(crate) size: i32,
         /// Xline container specification
         #[cfg_attr(test, garde(skip))]
         pub(crate) container: Container,
@@ -89,10 +92,10 @@ mod v1 {
     }
 
     /// Xline cluster status
-    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
     pub(crate) struct ClusterStatus {
-        /// Whether the operator is working on creating or updating
-        pub(crate) pending: bool,
+        /// The available nodes' number in the cluster
+        pub(crate) available: i32,
     }
 
     #[cfg(test)]

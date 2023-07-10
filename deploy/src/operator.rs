@@ -1,11 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use crate::config::Config;
-use crate::controller::{on_error, reconcile, Context};
-use crate::crd::Cluster;
-use crate::utils::compare_versions;
+use std::time::Duration;
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -15,6 +11,11 @@ use kube::runtime::watcher::Config as WatcherConfig;
 use kube::runtime::Controller;
 use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::debug;
+
+use crate::config::Config;
+use crate::controller::{on_error, reconcile, Context};
+use crate::crd::Cluster;
+use crate::utils::compare_versions;
 
 /// Deployment Operator for k8s
 #[derive(Debug)]
@@ -45,7 +46,10 @@ impl Operator {
         } else {
             Api::namespaced(kube_client.clone(), self.config.namespace.as_str())
         };
-        let cx: Arc<Context> = Arc::new(Context { kube_client });
+        let cx: Arc<Context> = Arc::new(Context {
+            kube_client,
+            reconcile_interval: Duration::from_secs(self.config.reconcile_interval),
+        });
 
         Controller::new(cluster_api.clone(), WatcherConfig::default())
             .shutdown_on_signal()
