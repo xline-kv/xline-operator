@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -46,10 +45,7 @@ impl Operator {
         } else {
             Api::namespaced(kube_client.clone(), self.config.namespace.as_str())
         };
-        let cx: Arc<Context> = Arc::new(Context {
-            kube_client,
-            reconcile_interval: Duration::from_secs(self.config.reconcile_interval),
-        });
+        let cx: Arc<Context> = Arc::new(Context { kube_client });
 
         Controller::new(cluster_api.clone(), WatcherConfig::default())
             .shutdown_on_signal()

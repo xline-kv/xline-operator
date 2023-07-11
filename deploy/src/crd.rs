@@ -11,8 +11,10 @@ use schemars::JsonSchema;
 
 /// Current CRD `XineCluster` version
 pub(crate) type Cluster = v1::Cluster;
-/// Current CRD Backup Storage Spec
+/// Current CRD Backup Storage Specification
 pub(crate) type StorageSpec = v1::StorageSpec;
+/// Current CRD Backup Specification
+pub(crate) type BackupSpec = v1::BackupSpec;
 
 // The `CustomResource` macro generates a struct `Cluster` that does not pass the clippy lint.
 #[allow(clippy::str_to_string)]
@@ -55,6 +57,14 @@ mod v1 {
         #[cfg_attr(test, garde(custom(option_backup_dive)))]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub(crate) backup: Option<BackupSpec>,
+        /// The data PVC, if it is not specified, then use emptyDir instead
+        #[cfg_attr(test, garde(skip))]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub(crate) data: Option<PersistentVolumeClaim>,
+        /// Some user defined persistent volume claim templates
+        #[cfg_attr(test, garde(skip))]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub(crate) pvcs: Option<Vec<PersistentVolumeClaim>>,
     }
 
     /// Xline cluster backup specification
@@ -68,27 +78,34 @@ mod v1 {
         ))]
         pub(crate) cron: String,
         /// Backup storage type
-        #[cfg_attr(test, garde(skip))]
+        #[cfg_attr(test, garde(dive))]
         #[serde(flatten)]
         pub(crate) storage: StorageSpec,
     }
 
     /// Xline cluster backup storage specification
     #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+    #[cfg_attr(test, derive(Validate))]
     #[serde(untagged)]
     pub(crate) enum StorageSpec {
-        S3 { s3: S3Spec },
-        Pvc { pvc: PersistentVolumeClaim },
+        S3 {
+            #[cfg_attr(test, garde(dive))]
+            s3: S3Spec,
+        },
+        Pvc {
+            #[cfg_attr(test, garde(skip))]
+            pvc: PersistentVolumeClaim,
+        },
     }
 
     /// Xline cluster backup S3 specification
     #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+    #[cfg_attr(test, derive(Validate))]
     pub(crate) struct S3Spec {
-        /// S3 bucket path to use for backup
-        /// TODO validate
-        pub(crate) path: String,
-        /// Name of k8s secret containing AWS creds
-        pub(crate) secret: String,
+        /// S3 bucket name to use for backup
+        #[cfg_attr(test, garde(pattern(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")))]
+        #[schemars(regex(pattern = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"))]
+        pub(crate) bucket: String,
     }
 
     /// Xline cluster status
@@ -114,7 +131,7 @@ mod test {
     use garde::Validate;
     use k8s_openapi::api::core::v1::{Container, PersistentVolumeClaim};
 
-    use crate::crd::v1::{BackupSpec, ClusterSpec, StorageSpec};
+    use crate::crd::v1::{BackupSpec, ClusterSpec, S3Spec, StorageSpec};
 
     #[test]
     fn validation_ok() {
@@ -127,6 +144,8 @@ mod test {
                 },
             }),
             container: Container::default(),
+            pvcs: None,
+            data: None,
         };
         assert!(Validate::validate(&ok, &()).is_ok());
     }
@@ -142,6 +161,8 @@ mod test {
                 },
             }),
             container: Container::default(),
+            pvcs: None,
+            data: None,
         };
         assert_eq!(
             Validate::validate(&bad_size, &()).unwrap_err().flatten()[0].0,
@@ -160,9 +181,33 @@ mod test {
                 },
             }),
             container: Container::default(),
+            pvcs: None,
+            data: None,
         };
         assert_eq!(
             Validate::validate(&bad_cron, &()).unwrap_err().flatten()[0].0,
+            "value.backup"
+        );
+    }
+
+    #[test]
+    fn validation_bad_s3_bucket() {
+        let bad_bucket = ClusterSpec {
+            size: 5,
+            backup: Some(BackupSpec {
+                cron: "*/15 * * * *".to_owned(),
+                storage: StorageSpec::S3 {
+                    s3: S3Spec {
+                        bucket: "&%$# /".to_owned(),
+                    },
+                },
+            }),
+            container: Container::default(),
+            pvcs: None,
+            data: None,
+        };
+        assert_eq!(
+            Validate::validate(&bad_bucket, &()).unwrap_err().flatten()[0].0,
             "value.backup"
         );
     }
