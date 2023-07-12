@@ -1,8 +1,12 @@
-use anyhow::Result;
 use std::cmp::Ordering;
 
+use anyhow::Result;
+
 /// Compare two CRD version
-pub(crate) fn compare_versions(version1: &str, version2: &str) -> Result<Ordering> {
+/// # Errors
+/// If the version dose not match the `v<number>`
+#[inline]
+pub fn compare_versions(version1: &str, version2: &str) -> Result<Ordering> {
     let v1_parts: u32 = version1.trim_start_matches('v').parse()?;
     let v2_parts: u32 = version2.trim_start_matches('v').parse()?;
     if v1_parts > v2_parts {
@@ -16,8 +20,9 @@ pub(crate) fn compare_versions(version1: &str, version2: &str) -> Result<Orderin
 
 #[cfg(test)]
 mod test {
-    use crate::utils::compare_versions;
     use std::cmp::Ordering;
+
+    use super::compare_versions;
 
     #[test]
     fn test_cmp_version() {

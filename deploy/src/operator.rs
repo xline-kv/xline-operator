@@ -3,18 +3,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use futures::StreamExt;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::{ListParams, Patch, PatchParams, PostParams};
-use kube::runtime::watcher::Config as WatcherConfig;
-use kube::runtime::Controller;
 use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::debug;
 
+use utils::migration::compare_versions;
+
 use crate::config::Config;
-use crate::controller::{on_error, reconcile, Context};
+use crate::controller::cluster::ClusterController;
+use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
-use crate::utils::compare_versions;
 
 /// Deployment Operator for k8s
 #[derive(Debug)]
@@ -45,14 +44,12 @@ impl Operator {
         } else {
             Api::namespaced(kube_client.clone(), self.config.namespace.as_str())
         };
-        let cx: Arc<Context> = Arc::new(Context { kube_client });
-
-        Controller::new(cluster_api.clone(), WatcherConfig::default())
-            .shutdown_on_signal()
-            .run(reconcile, on_error, cx)
-            .filter_map(|x| async move { x.ok() })
-            .for_each(|_| futures::future::ready(()))
-            .await;
+        let ctx = Arc::new(Context::new(ClusterController {
+            kube_client,
+            cluster_api,
+            cluster_suffix: self.config.cluster_suffix.clone(),
+        }));
+        ClusterController::run(ctx).await;
         Ok(())
     }
 
