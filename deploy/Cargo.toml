@@ -13,6 +13,7 @@ keywords = ["kubernetes", "xline", "operator"]
 
 [dependencies]
 anyhow = "1.0.71"
+async-trait = "0.1.68"
 clap = { version = "4.3.4", features = ["derive"] }
 futures = "0.3.28"
 k8s-openapi = { version = "0.18.0", features = ["v1_26", "schemars"] }
@@ -29,6 +30,7 @@ tokio = { version = "1.0", features = [
 ] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+utils = { path = "../utils" }
 
 [dev-dependencies]
 garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }

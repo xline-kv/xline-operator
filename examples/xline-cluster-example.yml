@@ -1,15 +1,41 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: backup-pv
+  name: backup-pv-0
 spec:
   storageClassName: xline-backup
   capacity:
-    storage: 10Gi
+    storage: 2Gi
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce  # The access mode ReadWriteMany cannot be used with the hostPath type.
   hostPath:
-    path: "/tmp"
+    path: "/tmp/xline-0"  # Ensure that this host path exists on all of your nodes.
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: backup-pv-1
+spec:
+  storageClassName: xline-backup
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/tmp/xline-1"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: backup-pv-2
+spec:
+  storageClassName: xline-backup
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/tmp/xline-2"
 ---
 apiVersion: xlineoperator.datenlord.io/v1
 kind: XlineCluster
@@ -23,8 +49,8 @@ spec:
       metadata:
         name: backup-pvc
       spec:
-        accessModes: [ "ReadWriteMany" ]
         storageClassName: xline-backup
+        accessModes: [ "ReadWriteOnce" ]
         resources:
           requests:
             storage: 1Gi

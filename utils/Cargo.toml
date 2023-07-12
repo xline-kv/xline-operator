@@ -1,0 +1,15 @@
+[package]
+name = "utils"
+version = "0.1.0"
+authors = ["DatenLord <dev@datenlord.io>"]
+edition = "2021"
+description = "Utilities funtions for xline-operator"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/utils"
+readme = "README.md"
+license = "Apache-2.0"
+keywords = ["utilities"]
+categories = ["utilities"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.71"
