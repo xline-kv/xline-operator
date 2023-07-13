@@ -8,12 +8,21 @@ pub struct Config {
     /// The namespace to work, default to cluster wide
     #[arg(long, value_parser=namespace_mode_parser, default_value = "")]
     pub namespace: Namespace,
+    /// The address on which the heartbeat HTTP server will listen to
+    #[arg(long, default_value = "0.0.0.0:8080")]
+    pub listen_addr: String,
     /// Whether to create CRD regardless of current version on k8s
     #[arg(long, default_value = "false")]
     pub create_crd: bool,
     /// The kubernetes cluster DNS suffix
     #[arg(long, default_value = "cluster.local")]
     pub cluster_suffix: String,
+    /// maximum interval between accepted `HeartbeatStatus`
+    #[arg(long, default_value = "2")]
+    pub heartbeat_period: u64,
+    /// unreachable counter threshold
+    #[arg(long, default_value = "4")]
+    pub unreachable_thresh: usize,
 }
 
 /// The namespace to work, `ClusterWide` means work with all namespaces
