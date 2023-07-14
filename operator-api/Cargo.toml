@@ -1,0 +1,14 @@
+[package]
+name = "operator-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["DatenLord <dev@datenlord.io>"]
+description = "API types that used in operators"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/operator-api"
+categories = ["API"]
+keywords = ["operator", "API", "operator"]
+
+[dependencies]
+serde = { version = "1.0.130", features = ["derive"] }
