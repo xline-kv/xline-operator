@@ -75,7 +75,7 @@
     clippy::missing_docs_in_private_items,
     clippy::missing_enforced_import_renames,
     clippy::missing_inline_in_public_items,
-    // clippy::mod_module_files, mod.rs file is used
+    // clippy::mod_module_files, backup file is used
     clippy::modulo_arithmetic,
     clippy::multiple_inherent_impl,
     // clippy::panic, allow in application code
@@ -148,9 +148,15 @@
     )
 )]
 
-/// Sidecar operator config
-pub mod config;
+/// Sidecar backup
+mod backup;
 /// Sidecar operator controller
 mod controller;
 /// Sidecar operator
 pub mod operator;
+/// The web server routers
+mod routers;
+/// Sidecar operator types
+pub mod types;
+/// The xline server handle in sidecar operator
+mod xline;

@@ -13,7 +13,11 @@ keywords = ["kubernetes", "xline", "operator"]
 
 [dependencies]
 anyhow = "1.0.71"
+async-trait = "0.1.68"
+axum = "0.6.18"
 clap = { version = "4.3.4", features = ["derive"] }
+futures = "0.3.28"
+serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.97"
 tera = { version = "1.17.1", default-features = false }
 thiserror = "1.0.40"
@@ -22,9 +26,14 @@ tokio = { version = "1.0", features = [
     "time",
     "macros",
     "net",
-    "signal",
-    "sync",
 ] }
 toml = "0.7.4"
+tonic = "0.9.2"
+tonic-health = "0.9.2"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+utils = { path = "../utils" }
+xline-client = { git = "https://github.com/xline-kv/Xline.git", package = "xline-client" }
+xlineapi = { git = "https://github.com/xline-kv/Xline.git", package = "xlineapi" }
+engine = { git = "https://github.com/xline-kv/Xline.git", package = "engine" }
+bytes = "1.4.0"

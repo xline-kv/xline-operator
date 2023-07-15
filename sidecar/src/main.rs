@@ -137,7 +137,7 @@
 
 use std::collections::HashMap;
 use std::fs::write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -145,8 +145,8 @@ use clap::{Parser, Subcommand};
 use tera::{Context, Tera};
 use tracing::debug;
 
-use xline_sidecar::config::{Backup, Config};
 use xline_sidecar::operator::Operator;
+use xline_sidecar::types::{Backup, Config};
 
 /// Command line interface
 #[derive(Parser, Debug)]
@@ -155,6 +155,14 @@ struct Cli {
     /// The name of this node
     #[arg(long)]
     name: String, // used in xline and deployment operator to identify this node
+
+    /// The host ip of each member, [node_name] -> [node_host]
+    #[arg(long, value_parser = parse_members)]
+    members: HashMap<String, String>,
+
+    /// The xline server port
+    #[arg(long)]
+    xline_port: u16,
 
     /// Sub commands
     #[command(subcommand)]
@@ -167,15 +175,18 @@ struct Cli {
 enum Commands {
     /// Run sidecar operator
     Run {
+        /// The xline container name
+        #[arg(long)]
+        container_name: String,
+        /// Operator web server port
+        #[arg(long)]
+        operator_port: u16,
         /// Check health interval, default 20 [unit: seconds]
         #[arg(long, default_value = "20")]
         check_interval: u64,
         /// Enable backup, choose a storage type, e.g. s3:bucket_name:secret_key or pv:/path/to/dir
         #[arg(long, value_parser=parse_backup_type)]
         backup: Option<Backup>,
-        /// Sidecar operators
-        #[arg(long, value_parser = parse_members)]
-        members: HashMap<String, String>,
     },
     /// Generate xline configuration file
     Gen {
@@ -185,15 +196,12 @@ enum Commands {
         /// Storage engine used in xline
         #[arg(long)]
         storage_engine: String,
-        /// The directory path contains xline kvserver data
+        /// The directory path contains xline kvserver data is the storage_engine is rocksdb
         #[arg(long)]
         data_dir: PathBuf,
         /// Whether this node is leader or not
         #[arg(long)]
         is_leader: bool,
-        /// Xline cluster members
-        #[arg(long, value_parser = parse_members)]
-        members: HashMap<String, String>,
         /// Additional arguments [format: JSON]
         #[arg(long)]
         additional: Option<String>,
@@ -212,13 +220,12 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
         "s3" => {
             if items.len() != 2 {
                 return Err(format!(
-                    "s3 backup type requires 2 arguments, got {}",
+                    "s3 backup type requires 1 arguments, got {}",
                     items.len()
                 ));
             }
-            let path = items.remove(0).to_owned();
-            let secret = items.remove(0).to_owned();
-            Ok(Backup::S3 { path, secret })
+            let bucket = items.remove(0).to_owned();
+            Ok(Backup::S3 { bucket })
         }
         "pv" => {
             if items.len() != 1 {
@@ -255,6 +262,9 @@ pub fn parse_members(s: &str) -> Result<HashMap<String, String>> {
     Ok(map)
 }
 
+/// Xline config template
+pub static XLINE_CONF: &str = include_str!("../../assets/xline_conf.tera");
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -264,13 +274,17 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Run {
+            container_name,
+            operator_port,
             check_interval,
             backup,
-            members,
         } => {
             let config = Config::new(
                 cli.name,
-                members,
+                container_name,
+                cli.members,
+                cli.xline_port,
+                operator_port,
                 Duration::from_secs(check_interval),
                 backup,
             );
@@ -281,49 +295,30 @@ async fn main() -> Result<()> {
             storage_engine,
             data_dir,
             is_leader,
-            members,
             additional,
-        } => generate_xline_config(
-            &path,
-            &cli.name,
-            &storage_engine,
-            &data_dir,
-            is_leader,
-            &members,
-            &additional,
-        ),
+        } => {
+            let mut ctx = Context::new();
+            let members: HashMap<_, _> = cli
+                .members
+                .into_iter()
+                .map(|(node_name, host)| (node_name, format!("{host}:{}", cli.xline_port)))
+                .collect();
+            ctx.insert("name", &cli.name);
+            ctx.insert("is_leader", &is_leader);
+            ctx.insert("members", &members);
+            ctx.insert("storage_engine", &storage_engine);
+            ctx.insert("data_dir", &data_dir);
+            let additional = if let Some(json) = additional.as_deref() {
+                let value: serde_json::Value = serde_json::from_str(json)?;
+                toml::to_string_pretty(&value)?
+            } else {
+                String::new()
+            };
+            ctx.insert("additional", &additional);
+            let conf = Tera::one_off(XLINE_CONF, &ctx, false)?;
+            debug!("generate config: \n{}", conf);
+            write(path, conf)?;
+            Ok(())
+        }
     }
-}
-
-/// Xline config template
-pub static XLINE_CONF: &str = include_str!("../../assets/xline_conf.tera");
-
-/// Generate xline config
-fn generate_xline_config(
-    path: &Path,
-    name: &str,
-    storage_engine: &str,
-    data_dir: &Path,
-    is_leader: bool,
-    members: &HashMap<String, String>,
-    additional: &Option<String>,
-) -> Result<()> {
-    let mut ctx = Context::new();
-    ctx.insert("name", name);
-    ctx.insert("is_leader", &is_leader);
-    ctx.insert("members", members);
-    ctx.insert("storage_engine", storage_engine);
-    ctx.insert("data_dir", data_dir);
-    let additional = if let Some(json) = additional.as_deref() {
-        let value: serde_json::Value = serde_json::from_str(json)?;
-        toml::to_string_pretty(&value)?
-    } else {
-        String::new()
-    };
-    ctx.insert("additional", &additional);
-
-    let conf = Tera::one_off(XLINE_CONF, &ctx, false)?;
-    debug!("generate config: \n{}", conf);
-    write(path, conf)?;
-    Ok(())
 }

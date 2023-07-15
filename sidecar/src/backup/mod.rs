@@ -1,12 +1,15 @@
-/// The persistent volume snapshot
-mod pv;
-/// The s3 snapshot
-mod s3;
+/// The persistent volume backup
+pub(crate) mod pv;
+/// The s3 backup
+pub(crate) mod s3;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tonic::Streaming;
+use xlineapi::SnapshotResponse;
 
 /// Snapshot file suffix
 const SNAPSHOT_SUFFIX: &str = "xline.backup";
@@ -14,9 +17,9 @@ const SNAPSHOT_SUFFIX: &str = "xline.backup";
 /// Snapshot metadata
 #[derive(Debug, PartialEq)]
 pub(crate) struct Metadata {
-    /// The name of this snapshot
+    /// The name of this backup
     pub(crate) name: String,
-    /// The revision of this snapshot
+    /// The revision of this backup
     pub(crate) revision: i64,
 }
 
@@ -32,9 +35,9 @@ impl TryFrom<&Path> for Metadata {
     fn try_from(value: &Path) -> std::result::Result<Self, Self::Error> {
         let filename = value
             .file_name()
-            .ok_or(anyhow!("snapshot file name not found, got {value:?}"))?
+            .ok_or(anyhow!("backup file name not found, got {value:?}"))?
             .to_str()
-            .ok_or(anyhow!("the snapshot path is not a valid unicode"))?;
+            .ok_or(anyhow!("the backup path is not a valid unicode"))?;
         let mut split = filename.trim_end_matches(SNAPSHOT_SUFFIX).split('.');
         if let (Some(name), Some(revision)) = (split.next(), split.next()) {
             let revision: i64 = revision.parse()?;
@@ -51,14 +54,14 @@ impl TryFrom<&Path> for Metadata {
 
 /// Snapshot provider
 #[async_trait]
-pub(crate) trait Provider {
-    /// Get the latest snapshot metadata
+pub(crate) trait Provider: Debug + Send + Sync + 'static {
+    /// Get the latest backup metadata
     async fn latest(&self) -> Result<Option<Metadata>>;
 
-    /// Save the snapshot at path src to this provider
-    async fn save<T: Send + Sync + AsRef<Path>>(&self, src: T, metadata: &Metadata) -> Result<()>;
+    /// Save the backup at path src to this provider
+    async fn save(&self, src: Streaming<SnapshotResponse>, metadata: &Metadata) -> Result<()>;
 
-    /// Load a snapshot and generate a path to store
+    /// Load a backup and generate a path to store
     async fn load(&self, metadata: &Metadata) -> Result<PathBuf>;
 
     /// Purge snapshots that exceed the TTL.
@@ -67,7 +70,7 @@ pub(crate) trait Provider {
 
 #[cfg(test)]
 mod test {
-    use crate::snapshot::Metadata;
+    use crate::backup::Metadata;
     use std::path::Path;
 
     #[test]
