@@ -1,17 +1,22 @@
 #![allow(dead_code)] // TODO remove when it is implemented
 
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::oneshot::Receiver;
+use tokio::sync::Mutex;
 use tokio::time::{Instant, Interval};
 
-use crate::config::Config;
+use crate::types::StatePayload;
+use crate::xline::XlineHandle;
 
 /// Sidecar operator controller
 #[derive(Debug)]
 pub(crate) struct Controller {
-    /// Sidecar operator config
-    config: Config,
+    /// The state of this operator
+    state: Arc<Mutex<StatePayload>>,
+    /// Xline handle
+    handle: Arc<XlineHandle>,
     /// Check interval
     check_interval: Interval,
 }
@@ -29,10 +34,14 @@ type Result<T> = std::result::Result<T, Error>;
 
 impl Controller {
     /// Constructor
-    pub(crate) fn new(config: Config) -> Self {
-        let check_interval = tokio::time::interval(config.check_interval);
+    pub(crate) fn new(
+        handle: Arc<XlineHandle>,
+        check_interval: Interval,
+        state: Arc<Mutex<StatePayload>>,
+    ) -> Self {
         Self {
-            config,
+            state,
+            handle,
             check_interval,
         }
     }

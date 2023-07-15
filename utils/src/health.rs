@@ -43,6 +43,7 @@ pub fn check_backup_volume() -> bool {
     let backup_volume = Path::new(DEFAULT_BACKUP_DIR);
     if !backup_volume.exists() {
         // If the backup volume path does not exist, it means that there are no available backup options.
+        // So the backup volume is always true.
         return true;
     }
     check_volume(backup_volume)
