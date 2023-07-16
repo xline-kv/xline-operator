@@ -57,10 +57,6 @@ spec:
   container:
     image: "datenlord/xline"
     name: "my-xline"
-    command:
-      - tail
-      - -F
-      - block_for_sidecar
     ports:
       - containerPort: 2379
         name: grpc

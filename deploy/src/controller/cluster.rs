@@ -7,18 +7,18 @@ use k8s_openapi::api::apps::v1::{
 };
 use k8s_openapi::api::batch::v1::{CronJob, CronJobSpec, JobSpec, JobTemplateSpec};
 use k8s_openapi::api::core::v1::{
-    Container, PersistentVolumeClaim, PodSpec, PodTemplateSpec, Service, ServicePort, ServiceSpec,
-    VolumeMount,
+    Container, EmptyDirVolumeSource, PersistentVolumeClaim, PodSpec, PodTemplateSpec, Service,
+    ServicePort, ServiceSpec, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, OwnerReference};
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Patch, PatchParams};
-use kube::{Api, Client, Resource};
+use kube::{Api, Client, Resource, ResourceExt};
 use tracing::{debug, error};
 
 use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
-use crate::controller::consts::FIELD_MANAGER;
+use crate::controller::consts::{DATA_EMPTY_DIR_NAME, FIELD_MANAGER};
 use crate::controller::Controller;
 use crate::crd::{Cluster, StorageSpec};
 
@@ -44,6 +44,9 @@ pub(crate) enum Error {
     /// Backup PV mount path is already mounted
     #[error("The path {0} is internally used in the xline operator and cannot be mounted.")]
     CannotMount(&'static str),
+    /// Volume(PVC) name conflict with `DATA_EMPTY_DIR_NAME`
+    #[error("The {0} is conflict with the name internally used in the xline operator")]
+    InvalidVolumeName(&'static str),
 }
 
 /// Controller result
@@ -52,7 +55,7 @@ type Result<T> = std::result::Result<T, Error>;
 impl ClusterController {
     /// Extract service ports
     fn extract_service_ports(cluster: &Arc<Cluster>) -> Result<Vec<ServicePort>> {
-        // expose all the container pods
+        // expose all the container ports
         let service_ports = cluster
             .spec
             .container
@@ -72,7 +75,7 @@ impl ClusterController {
     }
 
     /// Extract persistent volume claims
-    fn extract_pvcs(cluster: &Arc<Cluster>) -> Vec<PersistentVolumeClaim> {
+    fn extract_pvcs(cluster: &Arc<Cluster>) -> Result<Vec<PersistentVolumeClaim>> {
         let mut pvcs = Vec::new();
         // check if the backup type is PV, add the pvc to pvcs
         if let Some(spec) = cluster.spec.backup.as_ref() {
@@ -86,15 +89,21 @@ impl ClusterController {
         }
         // extend the user defined pvcs
         if let Some(spec_pvcs) = cluster.spec.pvcs.clone() {
+            if spec_pvcs
+                .iter()
+                .any(|pvc| pvc.name_any() == DATA_EMPTY_DIR_NAME)
+            {
+                return Err(Error::InvalidVolumeName(".spec.pvcs[].metadata.name"));
+            }
             pvcs.extend(spec_pvcs);
         }
-        pvcs
+        Ok(pvcs)
     }
 
     /// Extract owner reference
     fn extract_owner_ref(cluster: &Arc<Cluster>) -> OwnerReference {
         // unwrap controller_owner_ref is always safe
-        let Some(owner_ref) = cluster.controller_owner_ref(&()) else { unreachable!() };
+        let Some(owner_ref) = cluster.controller_owner_ref(&()) else { unreachable!("kube-runtime has undergone some changes.") };
         owner_ref
     }
 
@@ -154,20 +163,14 @@ impl ClusterController {
         Ok(())
     }
 
-    /// Apply the statefulset in k8s to reconcile cluster
-    async fn apply_statefulset(
-        &self,
-        namespace: &str,
-        name: &str,
+    /// Prepare the xline container provided by user
+    fn prepare_container(
         cluster: &Arc<Cluster>,
-        pvcs: Vec<PersistentVolumeClaim>,
-        metadata: &ObjectMeta,
-    ) -> Result<()> {
-        let api: Api<StatefulSet> = Api::namespaced(self.kube_client.clone(), namespace);
-        let mut container = cluster.spec.container.clone();
+        mut container: Container,
+    ) -> Result<(Container, Option<Vec<Volume>>)> {
         let backup = cluster.spec.backup.clone();
         let data = cluster.spec.data.clone();
-
+        let mut volumes = None;
         // mount backup volume to `DEFAULT_BACKUP_PV_MOUNT_PATH` in container
         let backup_mount = if let Some(spec) = backup {
             let backup_pvc_name = match spec.storage {
@@ -178,28 +181,38 @@ impl ClusterController {
                         .ok_or(Error::MissingObject(".spec.backup.pvc.metadata.name"))?,
                 ),
             };
-            backup_pvc_name.map(|pvc_name| VolumeMount {
-                mount_path: DEFAULT_BACKUP_DIR.to_owned(),
-                name: pvc_name,
-                ..VolumeMount::default()
-            })
+            if let Some(pvc_name) = backup_pvc_name {
+                if pvc_name == DATA_EMPTY_DIR_NAME {
+                    return Err(Error::InvalidVolumeName(".spec.backup.metadata.name"));
+                }
+                Some(VolumeMount {
+                    mount_path: DEFAULT_BACKUP_DIR.to_owned(),
+                    name: pvc_name,
+                    ..VolumeMount::default()
+                })
+            } else {
+                None
+            }
         } else {
             None
         };
         // mount data volume to `DEFAULT_DATA_DIR` in container
         let data_mount = if let Some(pvc) = data {
+            let name = pvc
+                .metadata
+                .name
+                .ok_or(Error::MissingObject(".spec.data.metadata.name"))?;
+            if name == DATA_EMPTY_DIR_NAME {
+                return Err(Error::InvalidVolumeName(".spec.data.metadata.name"));
+            }
             Some(VolumeMount {
                 mount_path: DEFAULT_DATA_DIR.to_owned(),
-                name: pvc
-                    .metadata
-                    .name
-                    .ok_or(Error::MissingObject(".spec.data.metadata.name"))?,
+                name,
                 ..VolumeMount::default()
             })
         } else {
             None
         };
-
         let mut mounts = Vec::new();
         // check if the container has specified volume_mounts before
         if let Some(spec_mounts) = container.volume_mounts {
@@ -216,6 +229,14 @@ impl ClusterController {
             {
                 return Err(Error::CannotMount(DEFAULT_DATA_DIR));
             }
+            if spec_mounts
+                .iter()
+                .any(|mount| mount.name == DATA_EMPTY_DIR_NAME)
+            {
+                return Err(Error::InvalidVolumeName(
+                    ".spec.container.volume_mounts[].name",
+                ));
+            }
             // extend the mounts
             mounts.extend(spec_mounts);
         }
@@ -224,10 +245,44 @@ impl ClusterController {
         }
         if let Some(mount) = data_mount {
             mounts.push(mount);
+        } else {
+            // if no data pv is provided, then use emptyDir as volume
+            volumes = Some(vec![Volume {
+                name: DATA_EMPTY_DIR_NAME.to_owned(),
+                empty_dir: Some(EmptyDirVolumeSource::default()),
+                ..Volume::default()
+            }]);
+            mounts.push(VolumeMount {
+                mount_path: DEFAULT_DATA_DIR.to_owned(),
+                name: DATA_EMPTY_DIR_NAME.to_owned(),
+                ..VolumeMount::default()
+            });
         }
         // override the container volume_mounts
         container.volume_mounts = Some(mounts);
+        // the main command should wait forever so that the sidecar operator could always contact the xline container
+        // so we use `tail -F /dev/null` here
+        container.command = Some(
+            vec!["tail", "-F", "/dev/null"]
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect(),
+        );
+        Ok((container, volumes))
+    }
 
+    /// Apply the statefulset in k8s to reconcile cluster
+    async fn apply_statefulset(
+        &self,
+        namespace: &str,
+        name: &str,
+        cluster: &Arc<Cluster>,
+        pvcs: Vec<PersistentVolumeClaim>,
+        metadata: &ObjectMeta,
+    ) -> Result<()> {
+        let api: Api<StatefulSet> = Api::namespaced(self.kube_client.clone(), namespace);
+        let container = cluster.spec.container.clone();
+        let (container, volumes) = Self::prepare_container(cluster, container)?;
         let _: StatefulSet = api
             .patch(
                 name,
@@ -257,7 +312,7 @@ impl ClusterController {
                             spec: Some(PodSpec {
                                 init_containers: Some(vec![]), // TODO publish sidecar operator to registry
                                 containers: vec![container], // TODO inject the sidecar operator container here
-                                volumes: None,
+                                volumes,
                                 ..PodSpec::default()
                             }),
                         },
@@ -342,7 +397,7 @@ impl Controller<Cluster> for ClusterController {
         );
         let (namespace, name) = Self::extract_id(cluster)?;
         let owner_ref = Self::extract_owner_ref(cluster);
-        let pvcs = Self::extract_pvcs(cluster);
+        let pvcs = Self::extract_pvcs(cluster)?;
         let service_ports = Self::extract_service_ports(cluster)?;
         let metadata = Self::build_metadata(namespace, name, owner_ref);
 

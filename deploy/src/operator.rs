@@ -1,19 +1,23 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::{ListParams, Patch, PatchParams, PostParams};
+use kube::runtime::wait::{await_condition, conditions};
 use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::debug;
-
 use utils::migration::compare_versions;
 
 use crate::config::Config;
 use crate::controller::cluster::ClusterController;
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
+
+/// wait crd to establish timeout
+const CRD_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Deployment Operator for k8s
 #[derive(Debug)]
@@ -120,6 +124,16 @@ impl Operator {
                 }
             }
         }
+
+        let establish = await_condition(
+            crd_api,
+            Cluster::crd_name(),
+            conditions::is_crd_established(),
+        );
+
+        let _crd = tokio::time::timeout(CRD_ESTABLISH_TIMEOUT, establish).await??;
+
+        debug!("crd established");
 
         Ok(())
     }
