@@ -55,7 +55,7 @@ type Result<T> = std::result::Result<T, Error>;
 impl ClusterController {
     /// Extract service ports
     fn extract_service_ports(cluster: &Arc<Cluster>) -> Result<Vec<ServicePort>> {
-        // expose all the container ports
+        // expose all the container's ports
         let service_ports = cluster
             .spec
             .container

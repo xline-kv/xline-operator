@@ -13,8 +13,8 @@ use schemars::JsonSchema;
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[cfg_attr(test, derive(Validate))]
 #[kube(
-    group = "xlineoperator.datenlord.io",
-    version = "v1",
+    group = "xlineoperator.xline.cloud",
+    version = "v1alpha",
     kind = "XlineCluster",
     singular = "xlinecluster",
     plural = "xlineclusters",
