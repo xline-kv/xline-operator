@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +8,7 @@ use kube::api::{ListParams, Patch, PatchParams, PostParams};
 use kube::runtime::wait::{await_condition, conditions};
 use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::debug;
-use utils::migration::compare_versions;
+use utils::migration::ApiVersion;
 
 use crate::config::Config;
 use crate::controller::cluster::ClusterController;
@@ -69,9 +68,7 @@ impl Operator {
             .into_iter()
             .filter_map(|crd| crd.metadata.name.map(|name| (name, crd.spec.versions)))
             .collect();
-
         let definition = Cluster::crd();
-
         match crds.get(Cluster::crd_name()) {
             None => {
                 // cannot find crd name, initial CRD
@@ -80,14 +77,13 @@ impl Operator {
             }
             Some(versions) => {
                 let current_version = Cluster::version(&());
-                debug!("found XlineCluster CRD, current version {current_version}",);
-
-                if versions.iter().all(|ver| {
-                    matches!(
-                        compare_versions(current_version.as_ref(), ver.name.as_str()),
-                        Ok(Ordering::Greater),
-                    )
-                }) {
+                debug!("found XlineCluster CRD, current version {current_version}");
+                let current_version: ApiVersion<Cluster> = current_version.as_ref().parse()?;
+                let versions: Vec<ApiVersion<Cluster>> = versions
+                    .iter()
+                    .map(|v| v.name.parse())
+                    .collect::<Result<_>>()?;
+                if versions.iter().all(|ver| &current_version > ver) {
                     debug!("{current_version} is larger than all version on k8s, patch to latest");
                     let _crd = crd_api
                         .patch(
@@ -98,20 +94,7 @@ impl Operator {
                         .await?;
                     return Ok(());
                 }
-
-                if !self.config.create_crd
-                    && versions.iter().any(|ver| {
-                        matches!(
-                            compare_versions(ver.name.as_str(), current_version.as_ref()),
-                            Ok(Ordering::Greater),
-                        )
-                    })
-                {
-                    panic!(
-                        "The current XlineCluster CRD version {current_version} is not compatible with higher version on k8s. Please use the latest deployment operator or set --create_crd to true."
-                    );
-                }
-
+                assert!(self.config.create_crd || !versions.iter().any(|ver| ver > &current_version), "The current XlineCluster CRD version {current_version} is not compatible with higher version on k8s. Please use the latest deployment operator or set --create_crd to true.");
                 if self.config.create_crd {
                     debug!("create_crd set to true, force patch this CRD");
                     let _crd = crd_api
@@ -124,17 +107,13 @@ impl Operator {
                 }
             }
         }
-
         let establish = await_condition(
             crd_api,
             Cluster::crd_name(),
             conditions::is_crd_established(),
         );
-
         let _crd = tokio::time::timeout(CRD_ESTABLISH_TIMEOUT, establish).await??;
-
         debug!("crd established");
-
         Ok(())
     }
 }

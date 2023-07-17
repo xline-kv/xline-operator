@@ -37,14 +37,14 @@ spec:
   hostPath:
     path: "/tmp/xline-2"
 ---
-apiVersion: xlineoperator.datenlord.io/v1
+apiVersion: xlineoperator.xline.cloud/v1alpha
 kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
   size: 3
   backup:
-    cron: "*/15 * * * *"
+    cron: "0 * * * *"
     pvc:
       metadata:
         name: backup-pvc
