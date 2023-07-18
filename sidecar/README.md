@@ -1,3 +1,3 @@
-# sidecar-operator
+# xline-sidecar
 
-The sidecar-operator component of xline-operator
+The xline sidecar component of xline-operator

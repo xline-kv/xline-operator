@@ -1,9 +1,9 @@
 [package]
-name = "sidecar-operator"
+name = "xline-sidecar"
 version = "0.1.0"
 edition = "2021"
 authors = ["DatenLord <dev@datenlord.io>"]
-description = "The sidecar-operator component of xline-operator"
+description = "The xline sidecar component of xline-operator"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/xline-kv/xline-operator/tree/main/sidecar"

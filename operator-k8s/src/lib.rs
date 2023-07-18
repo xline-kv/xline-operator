@@ -148,11 +148,11 @@
     )
 )]
 
-/// Deploy operator config
+/// Xline operator config
 pub mod config;
-/// Deploy controller
+/// Xline operator controller
 mod controller;
 /// Custom resource definition
 mod crd;
-/// Deploy operator
+/// Xline operator
 pub mod operator;
