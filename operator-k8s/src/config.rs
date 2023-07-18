@@ -5,9 +5,6 @@ use clap::Parser;
 #[non_exhaustive]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
-    /// The address on which the heartbeat HTTP server will listen to
-    #[arg(long, default_value = "0.0.0.0:8080")]
-    pub listen_addr: String,
     /// The namespace to deploy
     #[arg(long, default_value = "default")]
     pub namespace: String,

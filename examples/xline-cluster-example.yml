@@ -1,62 +1,15 @@
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: backup-pv-0
-spec:
-  storageClassName: xline-backup
-  capacity:
-    storage: 2Gi
-  accessModes:
-    - ReadWriteOnce  # The access mode ReadWriteMany cannot be used with the hostPath type.
-  hostPath:
-    path: "/tmp/xline-0"  # Ensure that this host path exists on all of your nodes.
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: backup-pv-1
-spec:
-  storageClassName: xline-backup
-  capacity:
-    storage: 2Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: "/tmp/xline-1"
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: backup-pv-2
-spec:
-  storageClassName: xline-backup
-  capacity:
-    storage: 2Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: "/tmp/xline-2"
----
 apiVersion: xlineoperator.xline.cloud/v1alpha
 kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
   size: 3
-  backup:
-    cron: "0 * * * *"
-    pvc:
-      metadata:
-        name: backup-pvc
-      spec:
-        storageClassName: xline-backup
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: 1Gi
   container:
     image: "datenlord/xline"
     name: "my-xline"
     ports:
       - containerPort: 2379
-        name: grpc
+        name: xline  # This name signifies the port that xline server is listening on.
+    env:
+      - name: RUST_LOG
+        value: DEBUG
