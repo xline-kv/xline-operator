@@ -11,7 +11,7 @@ use tracing::debug;
 use utils::migration::ApiVersion;
 
 use crate::config::Config;
-use crate::controller::cluster::ClusterController;
+use crate::controller::cluster::Controller as ClusterController;
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
 
@@ -49,10 +49,9 @@ impl Operator {
         };
         let ctx = Arc::new(Context::new(ClusterController {
             kube_client,
-            cluster_api,
             cluster_suffix: self.config.cluster_suffix.clone(),
         }));
-        ClusterController::run(ctx).await;
+        ClusterController::run(ctx, cluster_api).await;
         Ok(())
     }
 

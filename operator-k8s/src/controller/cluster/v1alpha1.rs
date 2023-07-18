@@ -7,27 +7,28 @@ use k8s_openapi::api::apps::v1::{
 };
 use k8s_openapi::api::batch::v1::{CronJob, CronJobSpec, JobSpec, JobTemplateSpec};
 use k8s_openapi::api::core::v1::{
-    Container, EmptyDirVolumeSource, PersistentVolumeClaim, PodSpec, PodTemplateSpec, Service,
-    ServicePort, ServiceSpec, Volume, VolumeMount,
+    Container, ContainerPort, EmptyDirVolumeSource, EnvVar, EnvVarSource, ObjectFieldSelector,
+    PersistentVolumeClaim, PodSpec, PodTemplateSpec, Service, ServicePort, ServiceSpec, Volume,
+    VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, OwnerReference};
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Patch, PatchParams};
 use kube::{Api, Client, Resource, ResourceExt};
 use tracing::{debug, error};
-
 use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
-use crate::controller::consts::{DATA_EMPTY_DIR_NAME, FIELD_MANAGER};
+use crate::controller::consts::{
+    CRONJOB_IMAGE, DATA_EMPTY_DIR_NAME, DEFAULT_SIDECAR_PORT, DEFAULT_XLINE_PORT, FIELD_MANAGER,
+    SIDECAR_PORT_NAME, XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
+};
 use crate::controller::Controller;
-use crate::crd::{Cluster, StorageSpec};
+use crate::crd::v1alpha1::{Cluster, StorageSpec};
 
 /// CRD `XlineCluster` controller
 pub(crate) struct ClusterController {
     /// Kubernetes client
     pub(crate) kube_client: Client,
-    /// Cluster api
-    pub(crate) cluster_api: Api<Cluster>,
     /// The kubernetes cluster dns suffix
     pub(crate) cluster_suffix: String,
 }
@@ -53,25 +54,59 @@ pub(crate) enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 impl ClusterController {
-    /// Extract service ports
-    fn extract_service_ports(cluster: &Arc<Cluster>) -> Result<Vec<ServicePort>> {
+    /// Extract ports
+    fn extract_ports(cluster: &Arc<Cluster>) -> (ContainerPort, ContainerPort, Vec<ServicePort>) {
         // expose all the container's ports
-        let service_ports = cluster
-            .spec
-            .container
-            .ports
-            .as_ref()
-            .map(|v| {
-                v.iter()
-                    .map(|port| ServicePort {
-                        name: port.name.clone(),
-                        port: port.container_port,
-                        ..ServicePort::default()
-                    })
-                    .collect()
+        let mut xline_port = None;
+        let mut sidecar_port = None;
+        let container_ports = cluster.spec.container.ports.clone().unwrap_or_default();
+        let mut service_ports: Vec<_> = container_ports
+            .into_iter()
+            .map(|port| {
+                // the port with name `xline` is considered to be the port of xline
+                if matches!(port.name.as_deref(), Some(XLINE_PORT_NAME)) {
+                    xline_port = Some(port.clone());
+                }
+                // the port with name `sidecar` is considered to be the port of xline
+                if matches!(port.name.as_deref(), Some(SIDECAR_PORT_NAME)) {
+                    sidecar_port = Some(port.clone());
+                }
+                ServicePort {
+                    name: port.name.clone(),
+                    port: port.container_port,
+                    ..ServicePort::default()
+                }
             })
-            .ok_or(Error::MissingObject(".spec.container.ports"))?;
-        Ok(service_ports)
+            .collect();
+        if xline_port.is_none() {
+            // add default xline port 2379 to service port if xline port is not specified
+            service_ports.push(ServicePort {
+                name: Some(XLINE_PORT_NAME.to_owned()),
+                port: DEFAULT_XLINE_PORT,
+                ..ServicePort::default()
+            });
+        }
+        if sidecar_port.is_none() {
+            // add default sidecar port 2380 to service port if sidecar port is not specified
+            service_ports.push(ServicePort {
+                name: Some(SIDECAR_PORT_NAME.to_owned()),
+                port: DEFAULT_SIDECAR_PORT,
+                ..ServicePort::default()
+            });
+        }
+        // if it is not specified, 2379 is used as xline port
+        let xline_port = xline_port.unwrap_or(ContainerPort {
+            name: Some(XLINE_PORT_NAME.to_owned()),
+            container_port: DEFAULT_XLINE_PORT,
+            ..ContainerPort::default()
+        });
+        // if it is not specified, 2380 is used as sidecar port
+        let sidecar_port = sidecar_port.unwrap_or(ContainerPort {
+            name: Some(SIDECAR_PORT_NAME.to_owned()),
+            container_port: DEFAULT_SIDECAR_PORT,
+            ..ContainerPort::default()
+        });
+        (xline_port, sidecar_port, service_ports)
     }
 
     /// Extract persistent volume claims
@@ -163,8 +198,8 @@ impl ClusterController {
         Ok(())
     }
 
-    /// Prepare the xline container provided by user
-    fn prepare_container(
+    /// Prepare container volume
+    fn prepare_container_volume(
         cluster: &Arc<Cluster>,
         mut container: Container,
     ) -> Result<(Container, Option<Vec<Volume>>)> {
@@ -246,7 +281,7 @@ impl ClusterController {
         if let Some(mount) = data_mount {
             mounts.push(mount);
         } else {
-            // if no data pv is provided, then use emptyDir as volume
+            // if data pv is not provided, then use emptyDir as volume
             volumes = Some(vec![Volume {
                 name: DATA_EMPTY_DIR_NAME.to_owned(),
                 empty_dir: Some(EmptyDirVolumeSource::default()),
@@ -260,14 +295,48 @@ impl ClusterController {
         }
         // override the container volume_mounts
         container.volume_mounts = Some(mounts);
-        // the main command should wait forever so that the sidecar operator could always contact the xline container
+        Ok((container, volumes))
+    }
+
+    /// Prepare container environment
+    fn prepare_container_env(mut container: Container) -> Container {
+        // to get pod unique name
+        let mut env = container.env.unwrap_or_default();
+        env.push(EnvVar {
+            name: XLINE_POD_NAME_ENV.to_owned(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "metadata.name".to_owned(),
+                    ..ObjectFieldSelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        });
+        // override the pod environments
+        container.env = Some(env);
+        container
+    }
+
+    /// Prepare container command
+    fn prepare_container_command(mut container: Container) -> Container {
+        // the main command should wait forever so that the sidecar could always contact the xline container
         // so we use `tail -F /dev/null` here
         container.command = Some(
-            vec!["tail", "-F", "/dev/null"]
-                .into_iter()
+            "tail -F /dev/null"
+                .split_whitespace()
                 .map(ToOwned::to_owned)
                 .collect(),
         );
+        container
+    }
+
+    /// Prepare the xline container provided by user
+    fn prepare_container(cluster: &Arc<Cluster>) -> Result<(Container, Option<Vec<Volume>>)> {
+        let container = cluster.spec.container.clone();
+        let (container, volumes) = Self::prepare_container_volume(cluster, container)?;
+        let container = Self::prepare_container_env(container);
+        let container = Self::prepare_container_command(container);
         Ok((container, volumes))
     }
 
@@ -281,8 +350,7 @@ impl ClusterController {
         metadata: &ObjectMeta,
     ) -> Result<()> {
         let api: Api<StatefulSet> = Api::namespaced(self.kube_client.clone(), namespace);
-        let container = cluster.spec.container.clone();
-        let (container, volumes) = Self::prepare_container(cluster, container)?;
+        let (container, volumes) = Self::prepare_container(cluster)?;
         let _: StatefulSet = api
             .patch(
                 name,
@@ -332,6 +400,7 @@ impl ClusterController {
         name: &str,
         size: i32,
         cron: &str,
+        sidecar_port: &ContainerPort,
         metadata: &ObjectMeta,
     ) -> Result<()> {
         let api: Api<CronJob> = Api::namespaced(self.kube_client.clone(), namespace);
@@ -339,8 +408,8 @@ impl ClusterController {
             "/bin/sh".to_owned(),
             "-ecx".to_owned(),
             format!(
-                "curl {name}-$((RANDOM % {size})).{name}.{namespace}.svc.{}/backup",
-                self.cluster_suffix
+                "curl {name}-$((RANDOM % {size})).{name}.{namespace}.svc.{}:{}/backup",
+                self.cluster_suffix, sidecar_port.container_port
             ), // choose a node randomly
         ];
         let _: CronJob = api
@@ -359,7 +428,7 @@ impl ClusterController {
                                         containers: vec![Container {
                                             name: format!("{name}-backup-cronjob"),
                                             image_pull_policy: Some("IfNotPresent".to_owned()),
-                                            image: Some("curlimages/curl".to_owned()),
+                                            image: Some(CRONJOB_IMAGE.to_owned()),
                                             command: Some(trigger_cmd),
                                             ..Container::default()
                                         }],
@@ -386,10 +455,6 @@ impl ClusterController {
 impl Controller<Cluster> for ClusterController {
     type Error = Error;
 
-    fn api(&self) -> &Api<Cluster> {
-        &self.cluster_api
-    }
-
     async fn reconcile_once(&self, cluster: &Arc<Cluster>) -> Result<()> {
         debug!(
             "Reconciling cluster: \n{}",
@@ -398,19 +463,21 @@ impl Controller<Cluster> for ClusterController {
         let (namespace, name) = Self::extract_id(cluster)?;
         let owner_ref = Self::extract_owner_ref(cluster);
         let pvcs = Self::extract_pvcs(cluster)?;
-        let service_ports = Self::extract_service_ports(cluster)?;
+        let (_xline_port, sidecar_port, service_ports) = Self::extract_ports(cluster);
         let metadata = Self::build_metadata(namespace, name, owner_ref);
 
         self.apply_headless_service(namespace, name, &metadata, service_ports)
             .await?;
         self.apply_statefulset(namespace, name, cluster, pvcs, &metadata)
             .await?;
+
         if let Some(spec) = cluster.spec.backup.as_ref() {
             Box::pin(self.apply_backup_cron_job(
                 namespace,
                 name,
                 cluster.spec.size,
                 spec.cron.as_str(),
+                &sidecar_port,
                 &metadata,
             ))
             .await?;
