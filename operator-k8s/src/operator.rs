@@ -18,7 +18,7 @@ use crate::crd::Cluster;
 /// wait crd to establish timeout
 const CRD_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Deployment Operator for k8s
+/// Xline Operator for k8s
 #[derive(Debug)]
 pub struct Operator {
     /// Config of this operator
@@ -94,7 +94,7 @@ impl Operator {
                         .await?;
                     return Ok(());
                 }
-                assert!(self.config.create_crd || !versions.iter().any(|ver| ver > &current_version), "The current XlineCluster CRD version {current_version} is not compatible with higher version on k8s. Please use the latest deployment operator or set --create_crd to true.");
+                assert!(self.config.create_crd || !versions.iter().any(|ver| ver > &current_version), "The current XlineCluster CRD version {current_version} is not compatible with higher version on k8s. Please use the latest xline-operator or set --create_crd to true.");
                 if self.config.create_crd {
                     debug!("create_crd set to true, force patch this CRD");
                     let _crd = crd_api

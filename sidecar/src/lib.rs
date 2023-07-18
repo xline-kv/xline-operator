@@ -1,4 +1,4 @@
-//! xline-operator
+//! xline-sidecar
 #![deny(
     // The following are allowed by default lints according to
     // https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html

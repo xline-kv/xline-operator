@@ -1,6 +1,6 @@
 use clap::Parser;
 
-/// Deploy operator config
+/// Xline operator config
 #[derive(Debug, Parser)]
 #[non_exhaustive]
 #[command(author, version, about, long_about = None)]

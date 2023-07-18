@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "deploy",
+    "operator-k8s",
     "sidecar",
     "utils",
 ]

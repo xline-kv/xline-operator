@@ -138,9 +138,9 @@
 
 use anyhow::Result;
 use clap::Parser;
-use deploy_operator::config::Config;
-use deploy_operator::operator::Operator;
 use tracing::debug;
+use xline_operator::config::Config;
+use xline_operator::operator::Operator;
 
 #[tokio::main]
 async fn main() -> Result<()> {
