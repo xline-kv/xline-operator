@@ -1,0 +1,48 @@
+name: Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: { }
+
+env:
+  CI_RUST_TOOLCHAIN: 1.70.0
+
+jobs:
+  validation:
+    name: 'Validation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: 'Create Single Cluster'
+        uses: AbsaOSS/k3d-action@v2
+        with:
+          cluster-name: 'test-cluster-1'
+          args: >-
+            --agents 3
+            --no-lb
+            --k3s-arg "--no-deploy=traefik,servicelb,metrics-server@server:*"
+      - name: 'Install Toolchain'
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.CI_RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: 'Prepare Image'
+        run: |
+          cargo build --release
+          cd scripts
+          cp ../target/release/xline-operator .
+          docker build . -t datenlord/xline-operator:latest
+          docker pull datenlord/xline:latest
+          k3d image import datenlord/xline-operator:latest -c test-cluster-1 --verbose
+          k3d image import datenlord/xline:latest -c test-cluster-1 --verbose
+      - name: 'Prepare Cluster'
+        run: |
+          kubectl create clusterrolebinding serviceaccount-cluster-admin --clusterrole=cluster-admin --serviceaccount=default:default
+          kubectl apply -f examples/crd-deployment.yml
+          sleep 30
+          kubectl apply -f examples/xline-cluster-example.yml
+          sleep 30
+      - name: 'Validate'
+        run: bash ./scripts/validation.sh
