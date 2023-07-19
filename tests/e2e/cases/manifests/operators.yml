@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-xline-operator
+  labels:
+    app: xline-operator
+spec:
+  # It is not advisable to set replicas to be greater than 1 because we have not implemented leader election among the operators.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xline-operator
+  template:
+    metadata:
+      labels:
+        app: xline-operator
+    spec:
+      containers:
+        - name: xline-operator
+          image: datenlord/xline-operator:latest
+          imagePullPolicy: Never

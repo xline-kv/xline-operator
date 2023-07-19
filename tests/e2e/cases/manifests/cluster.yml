@@ -5,7 +5,7 @@ metadata:
 spec:
   size: 3
   container:
-    image: "datenlord/xline"
+    image: "datenlord/xline:latest"
     name: "my-xline"
     ports:
       - containerPort: 2379
