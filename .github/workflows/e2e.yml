@@ -1,0 +1,36 @@
+name: E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: { }
+
+env:
+  CI_RUST_TOOLCHAIN: 1.70.0
+  KIND_VERSION: v0.20.0
+
+jobs:
+  validation:
+    name: 'Validation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: 'Install Kind'
+        run: |
+          wget https://github.com/kubernetes-sigs/kind/releases/download/${{ env.KIND_VERSION }}/kind-linux-amd64
+          chmod +x kind-linux-amd64
+          mv kind-linux-amd64 /usr/local/bin/kind
+      - name: 'Install Toolchain'
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.CI_RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: 'Build Image'
+        run: |
+          cargo build --release
+          cd build
+          cp ../target/release/xline-operator .
+          docker build . -t datenlord/xline-operator:latest -f operator.Dockerfile
+      - name: 'E2E CI'
+        run: bash ./tests/e2e/e2e.sh -p ci
