@@ -38,6 +38,7 @@ jobs:
     name: Check
     steps:
       - uses: actions/checkout@v2
+      - run: sudo bash ./.github/scripts/install_deps.sh
       - uses: actions-rs/toolchain@v1
         with:
           profile: default
@@ -68,6 +69,7 @@ jobs:
     name: Test
     steps:
       - uses: actions/checkout@v2
+      - run: sudo bash ./.github/scripts/install_deps.sh
       - uses: actions-rs/toolchain@v1
         with:
           profile: default
@@ -83,6 +85,7 @@ jobs:
     name: Clippy
     steps:
       - uses: actions/checkout@v2
+      - run: sudo bash ./.github/scripts/install_deps.sh
       - uses: actions-rs/toolchain@v1
         with:
           profile: default

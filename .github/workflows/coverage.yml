@@ -18,6 +18,7 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v3
+      - run: sudo bash ./.github/scripts/install_deps.sh
       - uses: Swatinem/rust-cache@v2
       - name: Install Rust
         run: rustup update stable
