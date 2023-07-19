@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use clippy_utilities::OverflowArithmetic;
 use flume::Receiver;
+use futures::Future;
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::DeleteParams;
 use kube::{Api, CustomResourceExt};
@@ -49,8 +50,25 @@ impl SidecarState {
         }
     }
 
-    /// Task that update the state received from sidecar operators
-    pub(crate) async fn state_update_task(mut self) -> Result<()> {
+    /// Run the state update task with graceful shutdown.
+    /// The task that update the state received from sidecar operators
+    #[allow(clippy::integer_arithmetic)] // required by tokio::select
+    pub(crate) async fn run_with_graceful_shutdown(
+        self,
+        graceful_shutdown: impl Future<Output = ()>,
+    ) -> Result<()> {
+        tokio::select! {
+            _ = graceful_shutdown => {
+                Ok(())
+            }
+            res = self.state_update_inner() => {
+                res
+            }
+        }
+    }
+
+    /// Inner task for state update
+    async fn state_update_inner(mut self) -> Result<()> {
         loop {
             let status = self.status_rx.recv_async().await?;
             debug!("reveived status: {status:?}");
@@ -84,7 +102,7 @@ impl SidecarState {
                     }
                     // Otherwise delete the pod, which will trigger k8s to recreate it
                     else {
-                        debug!("{name} is unreachable, count: {count}, deleteing the pod");
+                        debug!("{name} is unreachable, count: {count}, deleting the pod");
 
                         if let Err(e) = self.pod_api.delete(name, &DeleteParams::default()).await {
                             error!("failed to delete pod {name}, {e}");
