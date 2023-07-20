@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-xline-operator
+  labels:
+    app: xline-operator
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: xline-operator
+  template:
+    metadata:
+      labels:
+        app: xline-operator
+    spec:
+      containers:
+        - name: xline-operator
+          image: datenlord/xline-operator:latest
+          imagePullPolicy: Never # remove this line to get the latest xline-operator.
