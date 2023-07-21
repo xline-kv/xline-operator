@@ -1,9 +1,9 @@
 #![allow(dead_code)] // TODO remove when it is implemented
 
+use event_listener::EventListener;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
-use tokio::sync::oneshot::Receiver;
 use tokio::sync::Mutex;
 use tokio::time::{Instant, Interval};
 
@@ -19,6 +19,8 @@ pub(crate) struct Controller {
     handle: Arc<XlineHandle>,
     /// Check interval
     check_interval: Interval,
+    /// graceful shutdown signal
+    graceful_shutdown: EventListener,
 }
 
 /// All possible errors
@@ -38,22 +40,21 @@ impl Controller {
         handle: Arc<XlineHandle>,
         check_interval: Interval,
         state: Arc<Mutex<StatePayload>>,
+        graceful_shutdown: EventListener,
     ) -> Self {
         Self {
             state,
             handle,
             check_interval,
+            graceful_shutdown,
         }
     }
 
     /// Perform a reconciliation
     #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
-    pub(crate) async fn reconcile_once(
-        &mut self,
-        shutdown_rx: &mut Receiver<()>,
-    ) -> Result<Instant> {
+    pub(crate) async fn reconcile_once(&mut self) -> Result<Instant> {
         select! {
-            _ = shutdown_rx => {
+            _ = &mut self.graceful_shutdown => {
                 // TODO notify the cluster of this node's shutdown
                 Err(Error::Shutdown)
             }

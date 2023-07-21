@@ -3924,6 +3924,7 @@ dependencies = [
  "bytes",
  "clap 4.3.10",
  "engine",
+ "event-listener",
  "futures",
  "serde",
  "serde_json",
