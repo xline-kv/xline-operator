@@ -1,5 +1,3 @@
-#![allow(dead_code)] // TODO remove when it is implemented
-
 use std::cmp::max;
 use std::future::Future;
 use std::net::ToSocketAddrs;
@@ -8,7 +6,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use axum::routing::{get, post};
 use axum::{Extension, Router};
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use tokio::sync::Mutex;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
@@ -43,11 +41,11 @@ impl Operator {
     /// Return Err when run failed
     #[inline]
     pub async fn run(&self) -> Result<()> {
-        let (graceful_tx, mut graceful_rx) = tokio::sync::oneshot::channel();
+        let graceful_shutdown_event = event_listener::Event::new();
         let forceful_shutdown = async {
             info!("press ctrl+c to shut down gracefully");
             let _ctrl_c = tokio::signal::ctrl_c().await;
-            let _r = graceful_tx.send(());
+            graceful_shutdown_event.notify(usize::MAX);
             info!("graceful shutdown already requested, press ctrl+c again to force shut down");
             let _ctrl_c_c = tokio::signal::ctrl_c().await;
         };
@@ -59,13 +57,16 @@ impl Operator {
                     Some(pv)
                 }
             });
-        let handle = Arc::new(XlineHandle::open(
-            &self.config.name,
-            &self.config.container_name,
-            backup,
-            self.config.xline_members(),
-            self.config.xline_port,
-        )?);
+        let handle = Arc::new(
+            XlineHandle::open(
+                &self.config.name,
+                &self.config.container_name,
+                backup,
+                self.config.xline_members(),
+                self.config.xline_port,
+            )
+            .await?,
+        );
         let offline_rev = handle.revision_offline().unwrap_or(1);
         let remote_rev = handle.revision_remote().await?;
         let revision = match remote_rev {
@@ -76,12 +77,24 @@ impl Operator {
             state: State::Start,
             revision,
         }));
-        let web_server = self.web_server(Arc::clone(&handle), Arc::clone(&state))?;
         let check_interval = interval(self.config.check_interval);
-        let mut controller = Controller::new(handle, check_interval, state);
+        let mut controller = Controller::new(
+            Arc::clone(&handle),
+            check_interval,
+            Arc::clone(&state),
+            graceful_shutdown_event.listen(),
+        );
+        let web_server = self.web_server(
+            Arc::clone(&handle),
+            Arc::clone(&state),
+            graceful_shutdown_event.listen(),
+        )?;
 
         tokio::pin!(forceful_shutdown);
         tokio::pin!(web_server);
+
+        let mut controller_shutdown = false;
+        let mut web_server_shutdown = false;
 
         #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
         loop {
@@ -90,23 +103,28 @@ impl Operator {
                     warn!("forceful shutdown");
                     break
                 }
-                res = controller.reconcile_once(&mut graceful_rx) => {
+                res = controller.reconcile_once(), if !controller_shutdown => {
                     match res {
                         Ok(instant) => {
                             debug!("successfully reconcile the cluster states within {:?}", instant.elapsed());
                         }
                         Err(err) => {
                             if err == Error::Shutdown {
-                                info!("graceful shutdown");
-                                break
+                                info!("controller graceful shutdown");
+                                controller_shutdown = true;
+                            } else {
+                                error!("reconcile failed, error: {}", err);
                             }
-                            error!("reconcile failed, error: {}", err);
                         }
                     }
                 }
-                res = &mut web_server => {
-                    return res
+                _ = &mut web_server, if !web_server_shutdown => {
+                    info!("web server graceful shutdown");
+                    web_server_shutdown = true;
                 }
+            }
+            if controller_shutdown && web_server_shutdown {
+                break;
             }
         }
         Ok(())
@@ -117,6 +135,7 @@ impl Operator {
         &self,
         handle: Arc<XlineHandle>,
         state: Arc<Mutex<StatePayload>>,
+        graceful_shutdown: impl Future<Output = ()>,
     ) -> Result<impl Future<Output = Result<()>>> {
         let app = Router::new()
             .route("/health", get(routers::health))
@@ -136,7 +155,7 @@ impl Operator {
         debug!("web server listen addr: {addr}");
         Ok(axum::Server::bind(&addr)
             .serve(app.into_make_service())
-            .with_graceful_shutdown(tokio::signal::ctrl_c().map(|_| ()))
+            .with_graceful_shutdown(graceful_shutdown)
             .map_err(anyhow::Error::from))
     }
 }

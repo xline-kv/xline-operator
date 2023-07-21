@@ -4,19 +4,20 @@
 
 use crate::backup::Metadata;
 use crate::backup::Provider;
+
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use bytes::Buf;
-use engine::{Engine, StorageEngine};
-use tonic::transport::Channel;
+use engine::{Engine, EngineType, StorageEngine};
+use tonic::transport::{Channel, Endpoint};
 use tonic_health::pb::health_check_response::ServingStatus;
 use tonic_health::pb::health_client::HealthClient;
 use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
-use utils::consts::KV_TABLE;
+use utils::consts::{DEFAULT_DATA_DIR, KV_TABLE, XLINE_TABLES};
 use xline_client::types::kv::RangeRequest;
-use xline_client::Client;
+use xline_client::{Client, ClientOptions};
 
 /// The xline server handle
 #[derive(Debug)]
@@ -37,9 +38,7 @@ pub(crate) struct XlineHandle {
 
 impl XlineHandle {
     /// Start the xline in pod and return the handle
-    #[allow(clippy::unimplemented)] // TODO remove it when it is implemented
-    #[allow(clippy::needless_pass_by_value)] // TODO remove it when it is implemented
-    pub(crate) fn open(
+    pub(crate) async fn open(
         name: &str,
         container_name: &str,
         backup: Option<Box<dyn Provider>>,
@@ -47,7 +46,19 @@ impl XlineHandle {
         xline_port: u16,
     ) -> Result<Self> {
         debug!("name: {name}, container_name: {container_name}, backup: {backup:?}, xline_members: {xline_members:?}, xline_port: {xline_port}");
-        unimplemented!()
+        let endpoint: Endpoint = format!("http://127.0.0.1:{xline_port}").parse()?;
+        let channel = Channel::balance_list(std::iter::once(endpoint));
+        let health_client = HealthClient::new(channel);
+        let engine = Engine::new(EngineType::Rocks(DEFAULT_DATA_DIR.parse()?), &XLINE_TABLES)?;
+        let client = Client::connect(xline_members.values(), ClientOptions::default()).await?;
+        Ok(Self {
+            name: name.to_owned(),
+            container_name: container_name.to_owned(),
+            backup,
+            client,
+            health_client,
+            engine,
+        })
     }
 
     /// Start the xline server
