@@ -378,6 +378,7 @@ impl ClusterController {
                                 ..ObjectMeta::default()
                             }),
                             spec: Some(PodSpec {
+                                affinity: cluster.spec.affinity.clone(),
                                 init_containers: Some(vec![]), // TODO publish sidecar operator to registry
                                 containers: vec![container], // TODO inject the sidecar operator container here
                                 volumes,

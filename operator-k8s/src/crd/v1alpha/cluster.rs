@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 use garde::Validate;
-use k8s_openapi::api::core::v1::{Container, PersistentVolumeClaim};
+use k8s_openapi::api::core::v1::{Affinity, Container, PersistentVolumeClaim};
 use k8s_openapi::serde::{Deserialize, Serialize};
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -34,6 +34,9 @@ pub(crate) struct ClusterSpec {
     /// Xline container specification
     #[cfg_attr(test, garde(skip))]
     pub(crate) container: Container,
+    /// The affinity of the xline node
+    #[cfg_attr(test, garde(skip))]
+    pub(crate) affinity: Option<Affinity>,
     /// The data PVC, if it is not specified, then use emptyDir instead
     #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -63,6 +66,7 @@ mod test {
         let ok = ClusterSpec {
             size: 3,
             container: Container::default(),
+            affinity: None,
             pvcs: None,
             data: None,
         };
@@ -74,6 +78,7 @@ mod test {
         let bad_size = ClusterSpec {
             size: 1,
             container: Container::default(),
+            affinity: None,
             pvcs: None,
             data: None,
         };
