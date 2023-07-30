@@ -351,6 +351,7 @@ impl ClusterController {
                             spec: Some(PodSpec {
                                 containers: vec![container],
                                 volumes,
+                                affinity: cluster.spec.affinity.clone(),
                                 ..PodSpec::default()
                             }),
                         },
