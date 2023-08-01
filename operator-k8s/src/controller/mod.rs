@@ -11,6 +11,7 @@ use kube::{Api, Resource};
 use serde::de::DeserializeOwned;
 
 use crate::controller::consts::DEFAULT_REQUEUE_DURATION;
+use crate::metrics::{RECONCILE_DURATION, RECONCILE_FAILED_COUNT};
 
 /// Cluster controller
 pub(crate) mod cluster;
@@ -48,6 +49,7 @@ where
 
     /// The reconcile function used in kube::runtime::Controller
     async fn reconcile(resource: Arc<R>, ctx: Arc<Context<Self>>) -> Result<Action, Self::Error> {
+        let _timer = RECONCILE_DURATION.start_timer();
         let controller = &ctx.controller;
         controller.reconcile_once(&resource).await?;
         Ok(Action::requeue(DEFAULT_REQUEUE_DURATION))
@@ -55,6 +57,9 @@ where
 
     /// The on_error function used in kube::runtime::Controller
     fn on_error(resource: Arc<R>, err: &Self::Error, ctx: Arc<Context<Self>>) -> Action {
+        RECONCILE_FAILED_COUNT
+            .with_label_values(&[&err.to_string()])
+            .inc();
         let controller = &ctx.controller;
         controller.handle_error(&resource, err);
         Action::requeue(DEFAULT_REQUEUE_DURATION)
