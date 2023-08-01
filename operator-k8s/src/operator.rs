@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use axum::routing::any;
 use axum::routing::post;
 use axum::{Json, Router};
 use flume::Sender;
@@ -21,6 +22,7 @@ use crate::config::{Config, Namespace};
 use crate::controller::cluster::Controller as ClusterController;
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
+use crate::metrics;
 use crate::sidecar_state::SidecarState;
 
 /// wait crd to establish timeout
@@ -48,6 +50,7 @@ impl Operator {
     /// Return `Err` when run failed
     #[inline]
     pub async fn run(&self) -> Result<()> {
+        metrics::init();
         let kube_client: Client = Client::try_default().await?;
         self.prepare_crd(&kube_client).await?;
         let (cluster_api, pod_api): (Api<Cluster>, Api<Pod>) = match self.config.namespace {
@@ -188,14 +191,16 @@ impl Operator {
 
     /// Run a server that receive sidecar operators' status
     async fn web_server(&self, status_tx: Sender<HeartbeatStatus>) -> Result<()> {
-        let status = Router::new().route(
-            "/status",
-            post(|body: Json<HeartbeatStatus>| async move {
-                if let Err(e) = status_tx.send(body.0) {
-                    error!("channel send error: {e}");
-                }
-            }),
-        );
+        let status = Router::new()
+            .route(
+                "/status",
+                post(|body: Json<HeartbeatStatus>| async move {
+                    if let Err(e) = status_tx.send(body.0) {
+                        error!("channel send error: {e}");
+                    }
+                }),
+            )
+            .route("/metrics", any(metrics::metrics));
 
         axum::Server::bind(&self.config.listen_addr.parse()?)
             .serve(status.into_make_service())

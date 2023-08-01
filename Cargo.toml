@@ -1,7 +1,7 @@
 [workspace]
 members = [
+    "operator-api",
     "operator-k8s",
     "sidecar",
     "utils",
-    "operator-api",
 ]
