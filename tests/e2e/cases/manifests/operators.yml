@@ -18,3 +18,4 @@ spec:
       containers:
         - name: xline-operator
           image: datenlord/xline-operator:latest
+          imagePullPolicy: Never
