@@ -55,6 +55,15 @@ impl<CR> ApiVersion<CR> {
             ApiVersion::Beta(_, sub, _) | ApiVersion::Alpha(_, sub, _) => sub,
         }
     }
+
+    /// return the numeric label order for comparing
+    fn label_order(&self) -> u32 {
+        match *self {
+            ApiVersion::Alpha(_, _, _) => 0,
+            ApiVersion::Beta(_, _, _) => 1,
+            ApiVersion::Stable(_, _) => 2,
+        }
+    }
 }
 
 impl<CR> FromStr for ApiVersion<CR> {
@@ -147,15 +156,10 @@ impl<CR> PartialOrd for ApiVersion<CR> {
         if self.main_version() != other.main_version() {
             return self.main_version().partial_cmp(&other.main_version());
         }
-        match (self, other) {
-            (Self::Beta(_, sub, _), Self::Beta(_, other_sub, _))
-            | (Self::Alpha(_, sub, _), Self::Alpha(_, other_sub, _)) => sub.partial_cmp(other_sub),
-            (Self::Alpha(_, _, _) | Self::Beta(_, _, _), Self::Stable(_, _))
-            | (Self::Alpha(_, _, _), Self::Beta(_, _, _)) => Some(Ordering::Less),
-            (Self::Stable(_, _) | Self::Beta(_, _, _), Self::Alpha(_, _, _))
-            | (Self::Stable(_, _), Self::Beta(_, _, _)) => Some(Ordering::Greater),
-            _ => Some(Ordering::Equal),
+        if self.label_order() != other.label_order() {
+            return self.label_order().partial_cmp(&other.label_order());
         }
+        self.sub_version().partial_cmp(&other.sub_version())
     }
 }
 
