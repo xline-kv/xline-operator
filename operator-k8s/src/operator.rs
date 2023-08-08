@@ -10,7 +10,7 @@ use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::debug;
 use utils::migration::ApiVersion;
 
-use crate::config::Config;
+use crate::config::{Config, Namespace};
 use crate::controller::cluster::Controller as ClusterController;
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
@@ -42,10 +42,11 @@ impl Operator {
     pub async fn run(&self) -> Result<()> {
         let kube_client: Client = Client::try_default().await?;
         self.prepare_crd(&kube_client).await?;
-        let cluster_api: Api<Cluster> = if self.config.cluster_wide {
-            Api::all(kube_client.clone())
-        } else {
-            Api::namespaced(kube_client.clone(), self.config.namespace.as_str())
+        let cluster_api: Api<Cluster> = match self.config.namespace {
+            Namespace::Single(ref namespace) => {
+                Api::namespaced(kube_client.clone(), namespace.as_str())
+            }
+            Namespace::ClusterWide => Api::all(kube_client.clone()),
         };
         let ctx = Arc::new(Context::new(ClusterController {
             kube_client,
