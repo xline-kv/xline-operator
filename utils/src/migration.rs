@@ -66,6 +66,25 @@ impl<CR> ApiVersion<CR> {
     }
 }
 
+/// parsing the label
+/// v<main><label><sub>
+macro_rules! parse_label {
+    ($str:expr, $label:literal, $tag:ident) => {
+        if $str.contains($label) {
+            let parts: Vec<_> = $str[1..].split($label).collect();
+            if parts.len() != 2 {
+                return Err(anyhow!("invalid api version format"));
+            }
+            let main_ver = parts[0].parse()?;
+            if parts[1].is_empty() {
+                return Ok(Self::$tag(main_ver, 0, PhantomData));
+            }
+            let sub_ver = parts[1].parse()?;
+            return Ok(Self::$tag(main_ver, sub_ver, PhantomData));
+        }
+    };
+}
+
 impl<CR> FromStr for ApiVersion<CR> {
     type Err = anyhow::Error;
 
@@ -77,30 +96,8 @@ impl<CR> FromStr for ApiVersion<CR> {
                 "invalid api version format, version does not start with 'v'"
             ));
         }
-        if s.contains("alpha") {
-            let parts: Vec<_> = s[1..].split("alpha").collect();
-            if parts.len() != 2 {
-                return Err(anyhow!("invalid api version format"));
-            }
-            let main_ver = parts[0].parse()?;
-            if parts[1].is_empty() {
-                return Ok(Self::Alpha(main_ver, 0, PhantomData));
-            }
-            let sub_ver = parts[1].parse()?;
-            return Ok(Self::Alpha(main_ver, sub_ver, PhantomData));
-        }
-        if s.contains("beta") {
-            let parts: Vec<_> = s[1..].split("beta").collect();
-            if parts.len() != 2 {
-                return Err(anyhow!("invalid api version format"));
-            }
-            let main_ver = parts[0].parse()?;
-            if parts[1].is_empty() {
-                return Ok(Self::Beta(main_ver, 0, PhantomData));
-            }
-            let sub_ver = parts[1].parse()?;
-            return Ok(Self::Beta(main_ver, sub_ver, PhantomData));
-        }
+        parse_label!(s, "alpha", Alpha);
+        parse_label!(s, "beta", Beta);
         let main = s[1..].parse()?;
         Ok(Self::Stable(main, PhantomData))
     }
