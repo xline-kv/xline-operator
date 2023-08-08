@@ -6,7 +6,7 @@ authors = ["DatenLord <dev@datenlord.io>"]
 description = "The main component of xline-operator"
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/xline-kv/xline-operator/tree/main/operator"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/operator-k8s"
 categories = ["operator"]
 keywords = ["kubernetes", "xline", "operator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
