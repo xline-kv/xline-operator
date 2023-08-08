@@ -134,13 +134,8 @@ impl<CR> PartialEq<Self> for ApiVersion<CR> {
     #[inline]
     #[allow(clippy::pattern_type_mismatch)]
     fn eq(&self, other: &Self) -> bool {
-        let kind = matches!(
-            (self, other),
-            (Self::Alpha(_, _, _), Self::Alpha(_, _, _))
-                | (Self::Beta(_, _, _), Self::Beta(_, _, _))
-                | (Self::Stable(_, _), Self::Stable(_, _))
-        );
-        kind && self.main_version() == other.main_version()
+        self.main_version() == other.main_version()
+            && self.label_order() == other.label_order()
             && self.sub_version() == other.sub_version()
     }
 }
