@@ -6,6 +6,7 @@ spec:
   size: 3
   container:
     image: "datenlord/xline:latest"
+    imagePullPolicy: IfNotPresent  # we will try to load image into cluster first.
     name: "my-xline"
     ports:
       - containerPort: 2379
