@@ -75,6 +75,7 @@ function main() {
       for testcase in $(list_test_cases); do
         echo "$testcase"
       done
+      exit 0
       ;;
     h)
       help
