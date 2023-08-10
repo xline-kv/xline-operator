@@ -11,5 +11,5 @@ pub(crate) mod v1alpha;
 ///     2. PV backup
 pub(crate) mod v1alpha1;
 
-/// Current CRD `XineCluster`
-pub(crate) type Cluster = v1alpha::Cluster;
+/// Current Version
+pub(crate) use v1alpha::*;

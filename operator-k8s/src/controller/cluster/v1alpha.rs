@@ -1,7 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ops::AddAssign;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::stream::FuturesUnordered;
+use futures::TryStreamExt;
 use k8s_openapi::api::apps::v1::{
     RollingUpdateStatefulSetStrategy, StatefulSet, StatefulSetSpec, StatefulSetUpdateStrategy,
 };
@@ -14,14 +17,20 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, 
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Patch, PatchParams};
 use kube::{Api, Client, Resource, ResourceExt};
+use tonic::transport::Channel;
+use tonic_health::pb::health_check_response::ServingStatus;
+use tonic_health::pb::health_client::HealthClient;
+use tonic_health::pb::HealthCheckRequest;
 use tracing::{debug, error};
 use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
 use crate::controller::consts::{
-    DATA_EMPTY_DIR_NAME, DEFAULT_XLINE_PORT, FIELD_MANAGER, XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
+    DATA_EMPTY_DIR_NAME, DEFAULT_STATE_UPDATE_TIMEOUT, DEFAULT_XLINE_PORT, FIELD_MANAGER,
+    XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
 };
 use crate::controller::Controller;
 use crate::crd::v1alpha::Cluster;
+use crate::crd::ClusterStatus;
 
 /// CRD `XlineCluster` controller
 pub(crate) struct ClusterController {
@@ -46,6 +55,12 @@ pub(crate) enum Error {
     /// Volume(PVC) name conflict with `DATA_EMPTY_DIR_NAME`
     #[error("The {0} is conflict with the name internally used in the xline operator")]
     InvalidVolumeName(&'static str),
+    /// Status update timeout
+    #[error("Status update timeout")]
+    StatusUpdateTimeout,
+    /// Tonic error
+    #[error("Tonic error {0}")]
+    TonicError(#[from] tonic::transport::Error),
 }
 
 /// Controller result
@@ -262,23 +277,36 @@ impl ClusterController {
         container
     }
 
-    /// Prepare container command
-    fn prepare_container_command(
+    /// Get cluster members
+    fn get_members(
         &self,
-        mut container: Container,
         namespace: &str,
         name: &str,
         size: i32,
         xline_port: &ContainerPort,
+    ) -> HashMap<String, String> {
+        (0..size)
+            .map(|i| {
+                (
+                    format!("{name}-{i}"),
+                    format!(
+                        "{name}-{i}.{name}.{namespace}.svc.{}:{}",
+                        self.cluster_suffix, xline_port.container_port
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    /// Prepare container command
+    fn prepare_container_command(
+        mut container: Container,
+        members: &HashMap<String, String>,
     ) -> Container {
-        // generate the members and setup xline in command line
-        let mut members = vec![];
-        for i in 0..size {
-            members.push(format!(
-                "{name}-{i}={name}-{i}.{name}.{namespace}.svc.{}:{}",
-                self.cluster_suffix, xline_port.container_port
-            ));
-        }
+        let members = members
+            .iter()
+            .map(|(name, addr)| format!("{name}={addr}"))
+            .collect::<Vec<_>>();
         // $(XLINE_POD_NAME_ENV) will read the pod name from environment
         container.command = Some(
             format!("xline --name $({XLINE_POD_NAME_ENV}) --storage-engine rocksdb --data-dir {DEFAULT_DATA_DIR} --members {}", members.join(","))
@@ -291,23 +319,63 @@ impl ClusterController {
 
     /// Prepare the xline container provided by user
     fn prepare_container(
-        &self,
-        namespace: &str,
-        name: &str,
         cluster: &Arc<Cluster>,
-        xline_port: &ContainerPort,
+        members: &HashMap<String, String>,
     ) -> Result<(Container, Option<Vec<Volume>>)> {
         let container = cluster.spec.container.clone();
         let (container, volumes) = Self::prepare_container_volume(cluster, container)?;
         let container = Self::prepare_container_env(container);
-        let container = self.prepare_container_command(
-            container,
-            namespace,
-            name,
-            cluster.spec.size,
-            xline_port,
-        );
+        let container = Self::prepare_container_command(container, members);
         Ok((container, volumes))
+    }
+
+    /// Xline cluster status update task
+    async fn status_update_task(
+        cluster_api: Api<Cluster>,
+        name: String,
+        members: HashMap<String, String>,
+        size: i32,
+    ) -> Result<()> {
+        let mut clients = members
+            .values()
+            .map(|addr| {
+                Ok(Channel::balance_list(std::iter::once(
+                    format!("http://{addr}").parse()?,
+                )))
+            })
+            .collect::<std::result::Result<Vec<Channel>, tonic::transport::Error>>()?
+            .into_iter()
+            .map(HealthClient::new)
+            .collect::<Vec<_>>();
+        tokio::time::timeout(DEFAULT_STATE_UPDATE_TIMEOUT, async move {
+            loop {
+                let mut available = 0i32;
+                let mut check_tasks: FuturesUnordered<_> = clients
+                    .iter_mut()
+                    .map(|client| client.check(HealthCheckRequest::default()))
+                    .collect();
+                while let Ok(Some(resp)) = check_tasks.try_next().await {
+                    if resp.into_inner().status == i32::from(ServingStatus::Serving) {
+                        available.add_assign(1);
+                    }
+                }
+                if let Err(e) = cluster_api
+                    .patch_status(
+                        &name,
+                        &PatchParams::apply(FIELD_MANAGER),
+                        &Patch::Apply(ClusterStatus { available }),
+                    )
+                    .await
+                {
+                    error!("kubernetes api error: {e}");
+                }
+                if available == size {
+                    break;
+                }
+            }
+        })
+        .await
+        .map_err(|_e| Error::StatusUpdateTimeout)
     }
 
     /// Apply the statefulset in k8s to reconcile cluster
@@ -321,7 +389,8 @@ impl ClusterController {
         metadata: &ObjectMeta,
     ) -> Result<()> {
         let api: Api<StatefulSet> = Api::namespaced(self.kube_client.clone(), namespace);
-        let (container, volumes) = self.prepare_container(namespace, name, cluster, xline_port)?;
+        let members = self.get_members(namespace, name, cluster.spec.size, xline_port);
+        let (container, volumes) = Self::prepare_container(cluster, &members)?;
         let _: StatefulSet = api
             .patch(
                 name,
@@ -360,6 +429,13 @@ impl ClusterController {
                 }),
             )
             .await?;
+        let status_task = Self::status_update_task(
+            Api::namespaced(self.kube_client.clone(), namespace),
+            name.to_owned(),
+            members.clone(),
+            cluster.spec.size,
+        );
+        let _ig = tokio::spawn(status_task);
         Ok(())
     }
 }
