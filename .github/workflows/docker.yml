@@ -2,16 +2,11 @@ name: Docker Image
 
 on:
   workflow_dispatch: { }
-  workflow_call:
-    secrets:
-      DOCKERHUB_USERNAME:
-        required: true
-      DOCKERHUB_TOKEN:
-        required: true
+  workflow_call: { }
 
 env:
   CI_RUST_TOOLCHAIN: 1.70.0
-  REPOSITORY: datenlord
+  REPOSITORY: xline-kv
 
 jobs:
   push_image:
@@ -76,11 +71,17 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
 
-      - name: Login to DockerHub
+      - name: Login to Github Container Registry
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ env.REPOSITORY }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Image ID
+        run: |
+          IMAGE_ID=ghcr.io/${{ env.REPOSITORY }}/${{ matrix.package }}
+          echo IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]') >> $GITHUB_ENV
 
       - name: Build Image
         id: build_image
@@ -89,7 +90,7 @@ jobs:
           context: ./build
           file: ./build/${{ matrix.package }}.Dockerfile
           platforms: ${{ matrix.job.platform }}
-          outputs: type=image,name=${{ env.REPOSITORY }}/${{ matrix.package }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE_ID }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export Digest
         run: |
@@ -123,4 +124,3 @@ jobs:
   merge_image:
     needs: push_image
     uses: ./.github/workflows/merge_image.yml
-    secrets: inherit
