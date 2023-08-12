@@ -11,6 +11,11 @@ categories = ["operator"]
 keywords = ["kubernetes", "xline", "operator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+doc = false
+name = "crdgen"
+path = "src/crdgen.rs"
+
 [dependencies]
 anyhow = "1.0.71"
 async-trait = "0.1.68"
@@ -21,6 +26,7 @@ kube = { version = "0.83.0", features = ["runtime", "derive"] }
 schemars = "0.8.6"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.97"
+serde_yaml = "0.9.25"
 thiserror = "1.0.40"
 tokio = { version = "1.0", features = [
     "rt-multi-thread",

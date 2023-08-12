@@ -15,6 +15,9 @@ use crate::controller::cluster::Controller as ClusterController;
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
 
+use std::fs::File;
+use std::io::Write;
+
 /// wait crd to establish timeout
 const CRD_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -53,6 +56,19 @@ impl Operator {
             cluster_suffix: self.config.cluster_suffix.clone(),
         }));
         ClusterController::run(ctx, cluster_api).await;
+        Ok(())
+    }
+
+    /// Generate crds
+    ///
+    /// # Errors
+    ///
+    /// Return `Err` when run failed
+    #[inline]
+    pub fn generate_crds(&self) -> Result<()> {
+        let path = format!("{}_{}.yaml",&Cluster::api_resource().group,&Cluster::api_resource().kind.to_lowercase());
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "{}",serde_yaml::to_string(&Cluster::crd()).unwrap()).unwrap();
         Ok(())
     }
 
