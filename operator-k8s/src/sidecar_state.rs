@@ -109,9 +109,9 @@ impl SidecarState {
                         }
                         let _ignore = self.unreachable.insert(name.clone(), 0);
                     }
-                // If recoverd, remove it from the cache
+                // If recovered, remove it from the cache
                 } else if self.unreachable.remove(name).is_some() {
-                    debug!("operator {name} recoverd");
+                    debug!("operator {name} recovered");
                 } else {
                     debug!("operator {name} online");
                 }

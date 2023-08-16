@@ -18,6 +18,7 @@ use kube::{Api, Client, Resource, ResourceExt};
 use tracing::{debug, error};
 use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
+use crate::controller::cluster::{ClusterMetrics, LabelError};
 use crate::controller::consts::{
     CRONJOB_IMAGE, DATA_EMPTY_DIR_NAME, DEFAULT_SIDECAR_PORT, DEFAULT_XLINE_PORT, FIELD_MANAGER,
     SIDECAR_PORT_NAME, XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
@@ -31,6 +32,8 @@ pub(crate) struct ClusterController {
     pub(crate) kube_client: Client,
     /// The kubernetes cluster dns suffix
     pub(crate) cluster_suffix: String,
+    /// Cluster metrics
+    pub(crate) metrics: ClusterMetrics,
 }
 
 /// All possible errors
@@ -48,6 +51,17 @@ pub(crate) enum Error {
     /// Volume(PVC) name conflict with `DATA_EMPTY_DIR_NAME`
     #[error("The {0} is conflict with the name internally used in the xline operator")]
     InvalidVolumeName(&'static str),
+}
+
+impl LabelError for Error {
+    fn label(&self) -> &str {
+        match *self {
+            Self::MissingObject(_) => "missing_object",
+            Self::Kube(_) => "kube",
+            Self::CannotMount(_) => "cannot_mount",
+            Self::InvalidVolumeName(_) => "invalid_volume_name",
+        }
+    }
 }
 
 /// Controller result
@@ -457,6 +471,7 @@ impl Controller<Cluster> for ClusterController {
     type Error = Error;
 
     async fn reconcile_once(&self, cluster: &Arc<Cluster>) -> Result<()> {
+        let _timer = self.metrics.record_duration();
         debug!(
             "Reconciling cluster: \n{}",
             serde_json::to_string_pretty(cluster.as_ref()).unwrap_or_default()
@@ -487,6 +502,7 @@ impl Controller<Cluster> for ClusterController {
     }
 
     fn handle_error(&self, resource: &Arc<Cluster>, err: &Self::Error) {
+        self.metrics.incr_failed_count(err);
         error!("{:?} reconciliation error: {}", resource.metadata.name, err);
     }
 }

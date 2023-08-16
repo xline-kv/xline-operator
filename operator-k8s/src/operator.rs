@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::Result;
 use axum::routing::any;
 use axum::routing::post;
-use axum::{Json, Router};
+use axum::{Extension, Router};
 use flume::Sender;
 use futures::FutureExt;
 use k8s_openapi::api::core::v1::Pod;
@@ -14,15 +14,16 @@ use kube::api::{ListParams, Patch, PatchParams, PostParams};
 use kube::runtime::wait::{await_condition, conditions};
 use kube::{Api, Client, CustomResourceExt, Resource};
 use operator_api::HeartbeatStatus;
+use prometheus::Registry;
 use tokio::signal;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
-use crate::controller::cluster::Controller as ClusterController;
+use crate::controller::cluster::{ClusterMetrics, Controller as ClusterController};
 use crate::controller::{Context, Controller};
 use crate::crd::Cluster;
-use crate::metrics;
+use crate::router::{healthz, metrics, sidecar_state};
 use crate::sidecar_state::SidecarState;
 
 /// wait crd to establish timeout
@@ -50,7 +51,6 @@ impl Operator {
     /// Return `Err` when run failed
     #[inline]
     pub async fn run(&self) -> Result<()> {
-        metrics::init();
         let kube_client: Client = Client::try_default().await?;
         self.prepare_crd(&kube_client).await?;
         let (cluster_api, pod_api): (Api<Cluster>, Api<Pod>) = match self.config.namespace {
@@ -72,8 +72,6 @@ impl Operator {
             let _ctrl_c_c = tokio::signal::ctrl_c().await;
         };
 
-        let web_server = self.web_server(status_tx);
-
         let state_update_task = SidecarState::new(
             status_rx,
             self.config.heartbeat_period,
@@ -83,11 +81,17 @@ impl Operator {
         )
         .run_with_graceful_shutdown(graceful_shutdown_event.listen());
 
+        let metrics = ClusterMetrics::new();
+        let registry = Registry::new();
+        metrics.register(&registry)?;
         let ctx = Arc::new(Context::new(ClusterController {
             kube_client,
             cluster_suffix: self.config.cluster_suffix.clone(),
+            metrics,
         }));
         let mut controller = ClusterController::run(ctx, cluster_api);
+
+        let web_server = self.web_server(status_tx, registry);
 
         tokio::pin!(forceful_shutdown);
         tokio::pin!(web_server);
@@ -190,17 +194,17 @@ impl Operator {
     }
 
     /// Run a server that receive sidecar operators' status
-    async fn web_server(&self, status_tx: Sender<HeartbeatStatus>) -> Result<()> {
+    async fn web_server(
+        &self,
+        status_tx: Sender<HeartbeatStatus>,
+        registry: Registry,
+    ) -> Result<()> {
         let status = Router::new()
-            .route(
-                "/status",
-                post(|body: Json<HeartbeatStatus>| async move {
-                    if let Err(e) = status_tx.send(body.0) {
-                        error!("channel send error: {e}");
-                    }
-                }),
-            )
-            .route("/metrics", any(metrics::metrics));
+            .route("/status", post(sidecar_state))
+            .route("/metrics", any(metrics))
+            .route("/healthz", any(healthz))
+            .layer(Extension(status_tx))
+            .layer(Extension(registry));
 
         axum::Server::bind(&self.config.listen_addr.parse()?)
             .serve(status.into_make_service())
