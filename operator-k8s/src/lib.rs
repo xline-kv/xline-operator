@@ -155,9 +155,9 @@ pub mod config;
 mod controller;
 /// Custom resource definition
 mod crd;
-/// Xline operator metrics
-mod metrics;
 /// Xline operator
 pub mod operator;
+/// Xline operator web server router
+mod router;
 /// Maintain the state of sidecar operators
 mod sidecar_state;
