@@ -23,8 +23,8 @@ use schemars::JsonSchema;
     status = "ClusterStatus",
     shortname = "xc",
     scale = r#"{"specReplicasPath":".spec.size", "statusReplicasPath":".status.available"}"#,
-    printcolumn = r#"{"name":"Size", "type":"string", "description":"The cluster size", "jsonPath":".spec.size"}"#,
-    printcolumn = r#"{"name":"Available", "type":"string", "description":"The available amount", "jsonPath":".status.available"}"#,
+    printcolumn = r#"{"name":"Size", "type":"integer", "description":"The cluster size", "jsonPath":".spec.size"}"#,
+    printcolumn = r#"{"name":"Available", "type":"integer", "description":"The available amount", "jsonPath":".status.available"}"#,
     printcolumn = r#"{"name":"Backup Cron", "type":"string", "description":"The cron spec defining the interval a backup CronJob is run", "jsonPath":".spec.backup.cron"}"#,
     printcolumn = r#"{"name":"Age", "type":"date", "description":"The cluster age", "jsonPath":".metadata.creationTimestamp"}"#
 )]

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
-use futures::TryStreamExt;
+use futures::StreamExt;
 use k8s_openapi::api::apps::v1::{
     RollingUpdateStatefulSetStrategy, StatefulSet, StatefulSetSpec, StatefulSetUpdateStrategy,
 };
@@ -17,6 +17,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, 
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::api::{Patch, PatchParams};
 use kube::{Api, Client, Resource, ResourceExt};
+use serde_json::json;
 use tonic::transport::Channel;
 use tonic_health::pb::health_check_response::ServingStatus;
 use tonic_health::pb::health_client::HealthClient;
@@ -330,6 +331,7 @@ impl ClusterController {
     }
 
     /// Xline cluster status update task
+    /// TODO: Needed to be refactored when custom controller is implemented
     async fn status_update_task(
         cluster_api: Api<Cluster>,
         name: String,
@@ -354,17 +356,26 @@ impl ClusterController {
                     .iter_mut()
                     .map(|client| client.check(HealthCheckRequest::default()))
                     .collect();
-                while let Ok(Some(resp)) = check_tasks.try_next().await {
+                while let Some(resp) = check_tasks.next().await {
+                    let resp = match resp {
+                        Ok(resp) => resp,
+                        Err(err) => {
+                            error!("health check error: {err}");
+                            continue;
+                        }
+                    };
                     if resp.into_inner().status == i32::from(ServingStatus::Serving) {
                         available.add_assign(1);
                     }
                 }
+                debug!("cluster {name} status update: {available}/{size}");
+                let status = json!({
+                    "status": ClusterStatus {
+                        available,
+                    }
+                });
                 if let Err(e) = cluster_api
-                    .patch_status(
-                        &name,
-                        &PatchParams::apply(FIELD_MANAGER),
-                        &Patch::Apply(ClusterStatus { available }),
-                    )
+                    .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status))
                     .await
                 {
                     error!("kubernetes api error: {e}");

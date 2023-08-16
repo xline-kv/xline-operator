@@ -7,6 +7,8 @@ rules:
       - xlineoperator.xline.cloud
     resources:
       - xlineclusters
+      - xlineclusters/status
+      - xlineclusters/scale
     verbs:
       - "*"
   - apiGroups:

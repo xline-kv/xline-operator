@@ -5,7 +5,7 @@ metadata:
   labels:
     app: xline-operator
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: xline-operator
