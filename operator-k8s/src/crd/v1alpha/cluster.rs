@@ -36,6 +36,7 @@ pub(crate) struct ClusterSpec {
     pub(crate) container: Container,
     /// The affinity of the xline node
     #[cfg_attr(test, garde(skip))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) affinity: Option<Affinity>,
     /// The data PVC, if it is not specified, then use emptyDir instead
     #[cfg_attr(test, garde(skip))]

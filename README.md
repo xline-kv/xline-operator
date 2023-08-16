@@ -114,6 +114,27 @@ The XlineCluster "my-xline-cluster" is invalid: spec.size: Invalid value: 1: spe
 $ kubectl delete -f examples/xline-cluster-example.yml
 ```
 
+### NodeAffinity
+
+You can use `affinity` to specify which nodes the xline servers should be scheduled on or which nodes should not be.
+
+Details about `affinity` can be found
+in [Kubernetes documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity).
+
+Create an xline cluster with `affinity`:
+
+```bash
+$ kubectl apply -f examples/affinity-example.yml
+```
+
+The above example will create an xline cluster with `affinity` that requires the xline servers to be scheduled on nodes
+which have an xline pod before.
+In other words, the xline cluster servers will be scheduled on the same node.
+
+You can replace the `topologyKey` with
+some other key to schedule the xline servers on different nodes shared the same `topologyKey`. You can also
+use `podAntiAffinity` to force the xline servers to be scheduled on different nodes.
+
 ## Code of Conduct
 
 Read the document [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for more details.
