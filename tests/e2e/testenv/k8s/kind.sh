@@ -23,6 +23,15 @@ function testenv::k8s::kind::create() {
   fi
 }
 
+function testenv::k8s::kind::export() {
+  if testenv::k8s::kind::_cluster_exists; then
+    log::info "Exporting logs kind cluster ${_TEST_ENV_KIND_CLUSTER_NAME}"
+    kind export logs --name ${_TEST_ENV_KIND_CLUSTER_NAME} /tmp/xlineoperator/${_TEST_ENV_KIND_CLUSTER_NAME}
+  else
+    log::warn "Kind cluster ${_TEST_ENV_KIND_CLUSTER_NAME} does not exist, skip export logs"
+  fi
+}
+
 function testenv::k8s::kind::delete() {
   if testenv::k8s::kind::_cluster_exists; then
     log::info "Deleting kind cluster ${_TEST_ENV_KIND_CLUSTER_NAME}"
