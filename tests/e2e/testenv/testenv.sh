@@ -9,6 +9,7 @@ function testenv::k8s::create() {
 }
 
 function testenv::k8s::delete() {
+  testenv::k8s::kind::export
   testenv::k8s::kind::delete
 }
 

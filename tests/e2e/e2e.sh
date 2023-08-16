@@ -62,10 +62,11 @@ function help() {
   echo "  -p <prefix>  Run selected test cases with prefix"
   echo "  -h           Print this help"
   echo "  -l           List all test cases"
+  echo "  -c           Clean the kind cluster."
 }
 
 function main() {
-  while getopts "p:lh" opt; do
+  while getopts "p:lhc" opt; do
     case "$opt" in
     p)
       export E2E_TEST_CASE_PREFIX="$OPTARG"
@@ -75,6 +76,10 @@ function main() {
       for testcase in $(list_test_cases); do
         echo "$testcase"
       done
+      exit 0
+      ;;
+    c)
+      teardown
       exit 0
       ;;
     h)
