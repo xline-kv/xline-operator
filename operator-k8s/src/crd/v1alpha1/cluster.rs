@@ -38,6 +38,7 @@ pub(crate) struct ClusterSpec {
     pub(crate) container: Container,
     /// The affinity of the xline node
     #[cfg_attr(test, garde(skip))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) affinity: Option<Affinity>,
     /// Backup specification
     #[cfg_attr(test, garde(custom(option_backup_dive)))]
