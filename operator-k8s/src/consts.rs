@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 /// The default requeue duration to achieve eventual consistency
-pub(super) const DEFAULT_REQUEUE_DURATION: Duration = Duration::from_secs(600);
+pub(crate) const DEFAULT_REQUEUE_DURATION: Duration = Duration::from_secs(600);
 /// The field manager identifier of xline operator
-pub(super) const FIELD_MANAGER: &str = "xlineoperator.datenlord.io";
+pub(crate) const FIELD_MANAGER: &str = "xlineoperator.datenlord.io";
 /// The emptyDir volume name of each pod if there is no data pvc specified
 pub(crate) const DATA_EMPTY_DIR_NAME: &str = "xline-data-empty-dir";
 /// The image used for cronjob to trigger backup
@@ -21,3 +21,10 @@ pub(crate) const DEFAULT_XLINE_PORT: i32 = 2379;
 pub(crate) const DEFAULT_SIDECAR_PORT: i32 = 2380;
 /// The environment name of the xline pod name
 pub(crate) const XLINE_POD_NAME_ENV: &str = "XLINE_POD_NAME";
+/// The annotation used to inherit labels in `XlineCluster`
+pub(crate) const ANNOTATION_INHERIT_LABELS_PREFIX: &str =
+    "xlineoperator.datenlord.io/inherit-label-prefix";
+/// The label attach to subresources, indicate the xlinecluster name
+pub(crate) const LABEL_CLUSTER_NAME: &str = "xlinecluster/name";
+/// The label attach to subresources, indicate the component type of this subresource
+pub(crate) const LABEL_CLUSTER_COMPONENT: &str = "xlinecluster/component";

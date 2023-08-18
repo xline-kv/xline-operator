@@ -151,10 +151,14 @@
 
 /// Xline operator config
 pub mod config;
-/// Xline operator controller
+/// Some constants
+mod consts;
+/// Custom resource controller
 mod controller;
 /// Custom resource definition
 mod crd;
+/// Custom resource manager
+mod manager;
 /// Xline operator
 pub mod operator;
 /// Xline operator web server router

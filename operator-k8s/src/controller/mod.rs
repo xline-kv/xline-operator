@@ -10,12 +10,10 @@ use kube::runtime::watcher::Config as WatcherConfig;
 use kube::{Api, Resource};
 use serde::de::DeserializeOwned;
 
-use crate::controller::consts::DEFAULT_REQUEUE_DURATION;
+use crate::consts::DEFAULT_REQUEUE_DURATION;
 
 /// Cluster controller
 pub(crate) mod cluster;
-/// CRD constants
-mod consts;
 
 /// The common context
 pub(crate) struct Context<C> {
