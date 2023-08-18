@@ -17,10 +17,10 @@ use kube::{Api, Client, Resource, ResourceExt};
 use tracing::{debug, error};
 use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
-use crate::controller::cluster::ClusterMetrics;
-use crate::controller::consts::{
+use crate::consts::{
     DATA_EMPTY_DIR_NAME, DEFAULT_XLINE_PORT, FIELD_MANAGER, XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
 };
+use crate::controller::cluster::ClusterMetrics;
 use crate::controller::{Controller, MetricsLabeled};
 use crate::crd::v1alpha::Cluster;
 
