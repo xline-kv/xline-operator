@@ -2,7 +2,8 @@
 
 use crate::consts::{
     ANNOTATION_INHERIT_LABELS_PREFIX, DEFAULT_SIDECAR_PORT, DEFAULT_XLINE_PORT,
-    LABEL_CLUSTER_COMPONENT, LABEL_CLUSTER_NAME, SIDECAR_PORT_NAME, XLINE_PORT_NAME,
+    LABEL_CLUSTER_COMPONENT, LABEL_CLUSTER_NAME, SIDECAR_PORT_NAME, XLINE_POD_NAME_ENV,
+    XLINE_PORT_NAME,
 };
 use crate::crd::v1alpha1::{Cluster, StorageSpec};
 
@@ -10,8 +11,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, GRPCAction, PersistentVolumeClaim, PersistentVolumeClaimVolumeSource,
-    Pod, PodSpec, PodTemplateSpec, Probe, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+    Container, ContainerPort, EnvVar, EnvVarSource, GRPCAction, ObjectFieldSelector,
+    PersistentVolumeClaim, PersistentVolumeClaimVolumeSource, Pod, PodSpec, PodTemplateSpec, Probe,
+    Service, ServicePort, ServiceSpec, Volume, VolumeMount,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
 use kube::{Resource, ResourceExt};
@@ -300,10 +302,49 @@ impl Factory {
             .extend(volume_mount);
     }
 
+    /// Set the entrypoint of the container
+    fn set_command(&self, container: &mut Container, index: usize) {
+        let extractor = Extractor::new(self.cluster.as_ref());
+        let (name, namespace) = extractor.extract_id();
+        let (xline_port, _, _) = extractor.extract_ports();
+        let srv_name = Self::component_name(name, Component::Service);
+        let mut members = vec![];
+        // the node before this index has already been added to the members
+        // we use the members from 0 to index to build the initial cluster config for this node
+        // and then do membership change to update the cluster config
+        for i in 0..=index {
+            let node_name = format!("{}-{i}", Self::component_name(name, Component::Node));
+            members.push(format!(
+                "{node_name}={node_name}.{srv_name}.{namespace}.svc.{}:{}",
+                self.cluster_suffix, xline_port.container_port
+            ));
+        }
+        // TODO add additional arguments config to CRD and append to the command
+        let xline_cmd = format!("xline --name $({XLINE_POD_NAME_ENV}) --storage-engine rocksdb --data-dir {DEFAULT_DATA_DIR} --members {}", members.join(","))
+            .split_whitespace()
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
+        // TODO we need a sidecar systemd process to take care of xline
+        container.command = Some(xline_cmd);
+    }
+
     /// Get the xline container
-    fn xline_container(&self) -> Container {
+    fn xline_container(&self, index: usize) -> Container {
         let mut container = self.cluster.spec.container.clone();
         self.mount_volume_on_container(&mut container);
+        self.set_command(&mut container, index);
+        // we need to set the env variable to get the pod name in the container
+        container.env = Some(vec![EnvVar {
+            name: XLINE_POD_NAME_ENV.to_owned(),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "metadata.name".to_owned(),
+                    ..ObjectFieldSelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        }]);
         container
     }
 
@@ -312,7 +353,7 @@ impl Factory {
         let extractor = Extractor::new(self.cluster.as_ref());
         let (name, _) = extractor.extract_id();
         let node_name = format!("{}-{index}", Self::component_name(name, Component::Node));
-        let xline = self.xline_container();
+        let xline = self.xline_container(index);
         let volumes = extractor
             .extract_pvc_template()
             .into_iter()
