@@ -24,6 +24,7 @@ jobs:
         k8s: [ v1.25.3, v1.26.0, v1.27.3 ]
     steps:
       - uses: actions/checkout@v2
+      - run: sudo bash ./.github/scripts/install_deps.sh
       - name: 'Install Kind'
         run: |
           wget https://github.com/kubernetes-sigs/kind/releases/download/${{ env.KIND_VERSION }}/kind-linux-amd64
