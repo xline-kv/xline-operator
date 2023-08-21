@@ -71,7 +71,7 @@ impl SidecarState {
     async fn state_update_inner(mut self) -> Result<()> {
         loop {
             let status = self.status_rx.recv_async().await?;
-            debug!("reveived status: {status:?}");
+            debug!("received status: {status:?}");
             let _prev = self.statuses.insert(status.name.clone(), status);
 
             let spec_size = self.get_spec_size().await?;
@@ -136,7 +136,7 @@ impl SidecarState {
             .values()
             .filter(|s| s.timestamp.overflow_add(heartbeat_period) >= latest_ts);
 
-        // The current accepted status is leass than half
+        // The current accepted status is less than half
         if accepted.clone().count() < majority {
             return None;
         }
