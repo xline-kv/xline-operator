@@ -81,15 +81,13 @@ impl Operator {
         tokio::pin!(forceful_shutdown);
 
         #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
-        loop {
+        {
             tokio::select! {
                 _ = &mut forceful_shutdown => {
                     warn!("forceful shutdown");
-                    break
                 }
                 _ = graceful_shutdown_event.closed() => {
                     info!("graceful shutdown");
-                    break
                 }
             }
         }
