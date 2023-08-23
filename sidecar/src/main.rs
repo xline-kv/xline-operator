@@ -170,18 +170,9 @@ enum Commands {
         /// Check health interval, default 20 [unit: seconds]
         #[arg(long, default_value = "20")]
         check_interval: u64,
-        /// Enable backup, choose a storage type, one of ['s3', 'pv']
-        #[arg(long)]
-        backup_type: Option<String>,
-        /// Specify the s3 storage path
-        #[arg(long)]
-        s3_path: Option<String>,
-        /// Specify the s3 secret
-        #[arg(long)]
-        s3_secret: Option<String>,
-        /// Specify the k8s persist volume mounted path
-        #[arg(long)]
-        pv_path: Option<PathBuf>,
+        /// Enable backup, choose a storage type, e.g. s3:bucket_name:secret_key or pv:/path/to/dir
+        #[arg(long, value_parser=parse_backup_type)]
+        backup: Option<Backup>,
         /// Sidecar operators
         #[arg(long, value_parser = parse_members)]
         members: HashMap<String, String>,
@@ -207,6 +198,42 @@ enum Commands {
         #[arg(long)]
         additional: Option<String>,
     },
+}
+
+/// parse backup type
+fn parse_backup_type(value: &str) -> Result<Backup, String> {
+    debug!("parse backup type: {}", value);
+    let mut items: Vec<_> = value.split([':', ' ', ',', '-']).collect();
+    if items.is_empty() {
+        return Err("backup type is empty".to_owned());
+    }
+    let backup_type = items.remove(0);
+    match backup_type {
+        "s3" => {
+            if items.len() != 2 {
+                return Err(format!(
+                    "s3 backup type requires 2 arguments, got {}",
+                    items.len()
+                ));
+            }
+            let path = items.remove(0).to_owned();
+            let secret = items.remove(0).to_owned();
+            Ok(Backup::S3 { path, secret })
+        }
+        "pv" => {
+            if items.len() != 1 {
+                return Err(format!(
+                    "pv backup type requires 1 argument, got {}",
+                    items.len()
+                ));
+            }
+            let path = items.remove(0).to_owned();
+            Ok(Backup::PV {
+                path: PathBuf::from(path),
+            })
+        }
+        _ => Err(format!("unknown backup type: {backup_type}")),
+    }
 }
 
 /// parse members from string
@@ -238,26 +265,9 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Run {
             check_interval,
-            backup_type,
-            s3_path,
-            s3_secret,
-            pv_path,
+            backup,
             members,
         } => {
-            let backup = backup_type
-                .map(|kind| match kind.as_str() {
-                    "s3" => Ok(Backup::S3 {
-                        path: s3_path.ok_or(anyhow!("please specify s3_path"))?,
-                        secret: s3_secret.ok_or(anyhow!("please specify s3_secret"))?,
-                    }),
-                    "pv" => Ok(Backup::PV {
-                        path: pv_path.ok_or(anyhow!("please specify pv_path"))?,
-                    }),
-                    _ => Err(anyhow!(
-                        "unknown backup storage type, please choose one of [s3, pv]"
-                    )),
-                })
-                .transpose()?;
             let config = Config::new(
                 cli.name,
                 members,
