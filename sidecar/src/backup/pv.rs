@@ -57,8 +57,8 @@ impl Provider for Pv {
             dst.write_all(&item.blob).await?;
         }
         debug!(
-            "backup snapshot file: {filename}, size: {} MB",
-            size.div(0x0010_0000)
+            "backup snapshot file: {filename}, size: {} KB",
+            size.div(1024)
         );
         Ok(())
     }
