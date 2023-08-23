@@ -5,8 +5,6 @@
 use crate::backup::Metadata;
 use crate::backup::Provider;
 
-use std::collections::HashMap;
-
 use anyhow::{anyhow, Result};
 use bytes::Buf;
 use engine::{Engine, EngineType, StorageEngine};
@@ -17,7 +15,7 @@ use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
 use utils::consts::{DEFAULT_DATA_DIR, KV_TABLE, XLINE_TABLES};
 use xline_client::types::kv::RangeRequest;
-use xline_client::{Client, ClientOptions};
+use xline_client::Client;
 
 /// The xline server handle
 #[derive(Debug)]
@@ -29,7 +27,7 @@ pub(crate) struct XlineHandle {
     /// The xline backup provider
     backup: Option<Box<dyn Provider>>,
     /// The xline client
-    client: Client,
+    client: Option<Client>,
     /// The xline health client
     health_client: HealthClient<Channel>,
     /// The rocks db engine
@@ -38,27 +36,32 @@ pub(crate) struct XlineHandle {
 
 impl XlineHandle {
     /// Start the xline in pod and return the handle
-    pub(crate) async fn open(
+    pub(crate) fn open(
         name: &str,
         container_name: &str,
         backup: Option<Box<dyn Provider>>,
-        xline_members: HashMap<String, String>,
         xline_port: u16,
     ) -> Result<Self> {
-        debug!("name: {name}, container_name: {container_name}, backup: {backup:?}, xline_members: {xline_members:?}, xline_port: {xline_port}");
+        debug!("name: {name}, container_name: {container_name}, backup: {backup:?}, xline_port: {xline_port}");
         let endpoint: Endpoint = format!("http://127.0.0.1:{xline_port}").parse()?;
         let channel = Channel::balance_list(std::iter::once(endpoint));
         let health_client = HealthClient::new(channel);
         let engine = Engine::new(EngineType::Rocks(DEFAULT_DATA_DIR.parse()?), &XLINE_TABLES)?;
-        let client = Client::connect(xline_members.values(), ClientOptions::default()).await?;
         Ok(Self {
             name: name.to_owned(),
             container_name: container_name.to_owned(),
             backup,
-            client,
             health_client,
             engine,
+            client: None, // TODO maybe we could initialize the client here when xline#423 is merged
         })
+    }
+
+    /// Return the xline client
+    fn client(&self) -> Client {
+        self.client
+            .clone()
+            .unwrap_or_else(|| panic!("xline client not initialized"))
     }
 
     /// Start the xline server
@@ -89,7 +92,7 @@ impl XlineHandle {
 
     /// Return the xline server kv revision if the server is online
     pub(crate) async fn revision_online(&self) -> Result<i64> {
-        let client = self.client.kv_client();
+        let client = self.client().kv_client();
         let response = client.range(RangeRequest::new(vec![])).await?;
         let header = response
             .header
@@ -142,7 +145,7 @@ impl XlineHandle {
                 return Ok(());
             }
         }
-        let mut client = self.client.maintenance_client();
+        let mut client = self.client().maintenance_client();
         // The reason for using xline-client to take a snapshot instead of directly
         // reading the data-dir with rocksdb is to prevent race condition.
         let stream = client.snapshot().await?;
