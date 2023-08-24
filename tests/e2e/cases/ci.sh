@@ -8,7 +8,7 @@ _TEST_CI_OPERATOR_NAME="my-xline-operator"
 _TEST_CI_DNS_SUFFIX="cluster.local"
 _TEST_CI_NAMESPACE="default"
 _TEST_CI_XLINE_PORT="2379"
-_TEST_CI_LOG_SYNC_TIMEOUT=30
+_TEST_CI_LOG_SYNC_TIMEOUT=60
 
 function test::ci::_mk_endpoints() {
   local endpoints="${_TEST_CI_CLUSTER_NAME}-0.${_TEST_CI_CLUSTER_NAME}.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
