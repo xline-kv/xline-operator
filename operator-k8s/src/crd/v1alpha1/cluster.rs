@@ -89,6 +89,15 @@ pub(crate) enum StorageSpec {
     },
 }
 
+impl StorageSpec {
+    pub(crate) fn as_pvc(&self) -> Option<&PersistentVolumeClaim> {
+        match *self {
+            Self::Pvc { ref pvc } => Some(pvc),
+            Self::S3 { .. } => None,
+        }
+    }
+}
+
 /// Xline cluster backup S3 specification
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[cfg_attr(test, derive(Validate))]

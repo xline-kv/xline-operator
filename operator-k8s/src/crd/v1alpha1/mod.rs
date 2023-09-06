@@ -1,6 +1,5 @@
 #![allow(unused)] // TODO: remove when this CRD is used
 
-pub(crate) use cluster::Cluster;
-pub(crate) use cluster::StorageSpec;
+pub(crate) use cluster::{BackupSpec, Cluster, ClusterSpec, StorageSpec};
 
 mod cluster;
