@@ -41,3 +41,4 @@ utils = { path = "../utils" }
 
 [dev-dependencies]
 garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }
+serde_yaml = "0.9.25"

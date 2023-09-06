@@ -28,3 +28,5 @@ pub(crate) const ANNOTATION_INHERIT_LABELS_PREFIX: &str =
 pub(crate) const LABEL_CLUSTER_NAME: &str = "xlinecluster/name";
 /// The label attach to subresources, indicate the component type of this subresource
 pub(crate) const LABEL_CLUSTER_COMPONENT: &str = "xlinecluster/component";
+/// Indicate the version of operator that creates this subresource
+pub(crate) const LABEL_OPERATOR_VERSION: &str = "xlinecluster/operator-version";
