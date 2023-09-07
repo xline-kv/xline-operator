@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use futures::{FutureExt, TryFutureExt};
-use tokio::sync::watch::Receiver;
+use tokio::sync::watch::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
@@ -40,21 +40,8 @@ impl Operator {
     #[inline]
     pub async fn run(&self) -> Result<()> {
         let (graceful_shutdown_event, _) = tokio::sync::watch::channel(());
-        let forceful_shutdown = async {
-            info!("press ctrl+c to shut down gracefully");
-            let _ctrl_c = tokio::signal::ctrl_c().await;
-            let _ig = graceful_shutdown_event.send(());
-            info!("graceful shutdown already requested to {} components, press ctrl+c again to force shut down", graceful_shutdown_event.receiver_count());
-            let _ctrl_c_c = tokio::signal::ctrl_c().await;
-        };
-        let backup: Option<Box<dyn Provider>> =
-            self.config.backup.clone().and_then(|backup| match backup {
-                Backup::S3 { .. } => None, // TODO s3
-                Backup::PV { path } => {
-                    let pv: Box<dyn Provider> = Box::new(Pv { backup_path: path });
-                    Some(pv)
-                }
-            });
+        let forceful_shutdown = self.forceful_shutdown(&graceful_shutdown_event);
+        let backup = self.init_backup();
         let handle = Arc::new(XlineHandle::open(
             &self.config.name,
             &self.config.container_name,
@@ -92,6 +79,31 @@ impl Operator {
             }
         }
         Ok(())
+    }
+
+    /// Initialize backup
+    fn init_backup(&self) -> Option<Box<dyn Provider>> {
+        self.config
+            .backup
+            .as_ref()
+            .and_then(|backup| match *backup {
+                Backup::S3 { .. } => None, // TODO S3 backup
+                Backup::PV { ref path } => {
+                    let pv: Box<dyn Provider> = Box::new(Pv {
+                        backup_path: path.clone(),
+                    });
+                    Some(pv)
+                }
+            })
+    }
+
+    /// Forceful shutdown
+    async fn forceful_shutdown(&self, graceful_shutdown_event: &Sender<()>) {
+        info!("press ctrl+c to shut down gracefully");
+        let _ctrl_c = tokio::signal::ctrl_c().await;
+        let _ig = graceful_shutdown_event.send(());
+        info!("graceful shutdown already requested to {} components, press ctrl+c again to force shut down", graceful_shutdown_event.receiver_count());
+        let _ctrl_c_c = tokio::signal::ctrl_c().await;
     }
 
     /// Start controller
