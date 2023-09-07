@@ -21,7 +21,7 @@ use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
 use crate::controller::cluster::{ClusterMetrics, Controller as ClusterController};
-use crate::controller::{Context, Controller};
+use crate::controller::{Context, Controller, Metrics};
 use crate::crd::Cluster;
 use crate::router::{healthz, metrics, sidecar_state};
 use crate::sidecar_state::SidecarState;

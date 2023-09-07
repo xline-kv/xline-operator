@@ -1,8 +1,10 @@
 use clippy_utilities::NumericCast;
-use prometheus::{Histogram, HistogramOpts, HistogramTimer, IntCounterVec, Opts, Registry};
+use prometheus::{Error, Histogram, HistogramOpts, HistogramTimer, IntCounterVec, Opts, Registry};
 
 use std::iter::repeat;
 use std::ops::Mul;
+
+use crate::controller::Metrics;
 
 /// Controller v1alpha
 mod v1alpha;
@@ -20,10 +22,28 @@ pub(crate) struct ClusterMetrics {
     reconcile_failed_count: IntCounterVec,
 }
 
-/// Label error
-trait LabelError {
-    /// Label
-    fn label(&self) -> &str;
+impl Default for ClusterMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Metrics for ClusterMetrics {
+    /// Register metrics
+    fn register(&self, registry: &Registry) -> Result<(), Error> {
+        registry.register(Box::new(self.reconcile_duration.clone()))?;
+        registry.register(Box::new(self.reconcile_failed_count.clone()))
+    }
+
+    /// Record duration
+    fn record_duration(&self) -> HistogramTimer {
+        self.reconcile_duration.start_timer()
+    }
+
+    /// Increment failed count
+    fn record_failed_count(&self, labels: &[&str]) {
+        self.reconcile_failed_count.with_label_values(labels).inc();
+    }
 }
 
 impl ClusterMetrics {
@@ -38,7 +58,7 @@ impl ClusterMetrics {
                 )
                 .buckets(exponential_time_bucket(0.1, 2.0, 10)),
             )
-            .expect(""),
+            .expect("failed to create operator_reconcile_duration_seconds histogram"),
             reconcile_failed_count: IntCounterVec::new(
                 Opts::new(
                     "operator_reconcile_failed_count",
@@ -48,24 +68,6 @@ impl ClusterMetrics {
             )
             .expect("failed to create operator_reconcile_failed_count counter"),
         }
-    }
-
-    /// Register metrics
-    pub(crate) fn register(&self, registry: &Registry) -> Result<(), prometheus::Error> {
-        registry.register(Box::new(self.reconcile_duration.clone()))?;
-        registry.register(Box::new(self.reconcile_failed_count.clone()))
-    }
-
-    /// Record duration
-    fn record_duration(&self) -> HistogramTimer {
-        self.reconcile_duration.start_timer()
-    }
-
-    /// Increment failed count
-    fn incr_failed_count(&self, reason: &impl LabelError) {
-        self.reconcile_failed_count
-            .with_label_values(&[reason.label()])
-            .inc();
     }
 }
 
