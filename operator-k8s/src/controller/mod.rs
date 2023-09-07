@@ -15,19 +15,6 @@ use crate::consts::DEFAULT_REQUEUE_DURATION;
 /// Cluster controller
 pub(crate) mod cluster;
 
-/// The common context
-pub(crate) struct Context<C> {
-    /// The controller held by this context
-    controller: C,
-}
-
-impl<C> Context<C> {
-    /// Constructor
-    pub(crate) fn new(controller: C) -> Self {
-        Self { controller }
-    }
-}
-
 /// Metrics labeled
 pub(crate) trait MetricsLabeled {
     /// Label
@@ -75,26 +62,24 @@ where
     fn handle_error(&self, resource: &Arc<R>, err: &Self::Error);
 
     /// The reconcile function used in kube::runtime::Controller
-    async fn reconcile(resource: Arc<R>, ctx: Arc<Context<Self>>) -> Result<Action, Self::Error> {
-        let controller = &ctx.controller;
+    async fn reconcile(resource: Arc<R>, controller: Arc<Self>) -> Result<Action, Self::Error> {
         let _timer = controller.metrics().record_duration();
         controller.reconcile_once(&resource).await?;
         Ok(Action::requeue(DEFAULT_REQUEUE_DURATION))
     }
 
     /// The on_error function used in kube::runtime::Controller
-    fn on_error(resource: Arc<R>, err: &Self::Error, ctx: Arc<Context<Self>>) -> Action {
-        let controller = &ctx.controller;
+    fn on_error(resource: Arc<R>, err: &Self::Error, controller: Arc<Self>) -> Action {
         controller.metrics().record_failed_count(&err.labels());
         controller.handle_error(&resource, err);
         Action::requeue(DEFAULT_REQUEUE_DURATION)
     }
 
     /// Run this controller
-    async fn run(ctx: Arc<Context<Self>>, api: Api<R>) {
+    async fn run(controller: Arc<Self>, api: Api<R>) {
         kube::runtime::Controller::new(api, WatcherConfig::default())
             .shutdown_on_signal()
-            .run(Self::reconcile, Self::on_error, ctx)
+            .run(Self::reconcile, Self::on_error, controller)
             .filter_map(|res| async move { res.ok() })
             .for_each(|_| futures::future::ready(()))
             .await;
