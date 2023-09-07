@@ -21,7 +21,7 @@ use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
 use crate::controller::cluster::{ClusterMetrics, Controller as ClusterController};
-use crate::controller::{Context, Controller, Metrics};
+use crate::controller::{Controller, Metrics};
 use crate::crd::Cluster;
 use crate::router::{healthz, metrics, sidecar_state};
 use crate::sidecar_state::SidecarState;
@@ -84,12 +84,12 @@ impl Operator {
         let metrics = ClusterMetrics::new();
         let registry = Registry::new();
         metrics.register(&registry)?;
-        let ctx = Arc::new(Context::new(ClusterController {
+        let controller = Arc::new(ClusterController {
             kube_client,
             cluster_suffix: self.config.cluster_suffix.clone(),
             metrics,
-        }));
-        let mut controller = ClusterController::run(ctx, cluster_api);
+        });
+        let mut controller = ClusterController::run(controller, cluster_api);
 
         let web_server = self.web_server(status_tx, registry);
 
