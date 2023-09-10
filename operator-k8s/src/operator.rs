@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +9,8 @@ use flume::Sender;
 use futures::FutureExt;
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use kube::api::{ListParams, Patch, PatchParams, PostParams};
+use kube::api::{DynamicObject, ListParams, Patch, PatchParams};
+use kube::core::crd::merge_crds;
 use kube::runtime::wait::{await_condition, conditions};
 use kube::{Api, Client, CustomResourceExt, Resource};
 use operator_api::HeartbeatStatus;
@@ -20,6 +20,7 @@ use tracing::{debug, info, warn};
 use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
+use crate::consts::FIELD_MANAGER;
 use crate::controller::cluster::{ClusterController, ClusterMetrics};
 use crate::controller::{Controller, Metrics};
 use crate::crd::Cluster;
@@ -132,64 +133,153 @@ impl Operator {
         Ok(())
     }
 
+    /// Wait for CRD to be established
+    async fn wait_crd_established(
+        crd_api: Api<CustomResourceDefinition>,
+        crd_name: &str,
+    ) -> Result<()> {
+        let establish = await_condition(crd_api, crd_name, conditions::is_crd_established());
+        debug!("wait for crd established");
+        _ = tokio::time::timeout(CRD_ESTABLISH_TIMEOUT, establish).await??;
+        Ok(())
+    }
+
     /// Prepare CRD
     /// This method attempts to initialize the CRD if it does not already exist.
     /// Additionally, it could migrate CRD with the version of `CURRENT_VERSION`.
     async fn prepare_crd(&self, kube_client: &Client) -> Result<()> {
         let crd_api: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
-        let crds: HashMap<_, _> = crd_api
-            .list(&ListParams::default())
-            .await?
-            .items
-            .into_iter()
-            .filter_map(|crd| crd.metadata.name.map(|name| (name, crd.spec.versions)))
-            .collect();
         let definition = Cluster::crd();
-        match crds.get(Cluster::crd_name()) {
-            None => {
-                // cannot find crd name, initial CRD
-                debug!("cannot found XlineCluster CRD, try to init it");
-                let _crd = crd_api.create(&PostParams::default(), &definition).await?;
+        let current_version: ApiVersion<Cluster> = Cluster::version(&()).as_ref().parse()?;
+
+        let ret = crd_api.get(Cluster::crd_name()).await;
+        if let Err(kube::Error::Api(kube::error::ErrorResponse { code: 404, .. })) = ret {
+            if !self.config.create_crd {
+                return Err(anyhow::anyhow!(
+                    "cannot found XlineCluster CRD, please set --create-crd to true or apply the CRD manually"
+                ));
             }
-            Some(versions) => {
-                let current_version = Cluster::version(&());
-                debug!("found XlineCluster CRD, current version {current_version}");
-                let current_version: ApiVersion<Cluster> = current_version.as_ref().parse()?;
-                let versions: Vec<ApiVersion<Cluster>> = versions
-                    .iter()
-                    .map(|v| v.name.parse())
-                    .collect::<Result<_>>()?;
-                if versions.iter().all(|ver| &current_version > ver) {
-                    debug!("{current_version} is larger than all version on k8s, patch to latest");
-                    let _crd = crd_api
-                        .patch(
-                            Cluster::crd_name(),
-                            &PatchParams::default(),
-                            &Patch::Merge(definition),
-                        )
-                        .await?;
-                    return Ok(());
-                }
-                assert!(self.config.create_crd || !versions.iter().any(|ver| ver > &current_version), "The current XlineCluster CRD version {current_version} is not compatible with higher version on k8s. Please use the latest xline-operator or set --create_crd to true.");
-                if self.config.create_crd {
-                    debug!("create_crd set to true, force patch this CRD");
-                    let _crd = crd_api
-                        .patch(
-                            Cluster::crd_name(),
-                            &PatchParams::default(),
-                            &Patch::Merge(definition),
-                        )
-                        .await?;
-                }
-            }
+            // the following code needs `customresourcedefinitions` write permission
+            debug!("cannot found XlineCluster CRD, try to init it");
+            _ = crd_api
+                .patch(
+                    Cluster::crd_name(),
+                    &PatchParams::apply(FIELD_MANAGER),
+                    &Patch::Apply(definition.clone()),
+                )
+                .await?;
+            Self::wait_crd_established(crd_api.clone(), Cluster::crd_name()).await?;
+            return Ok(());
         }
-        let establish = await_condition(
-            crd_api,
-            Cluster::crd_name(),
-            conditions::is_crd_established(),
-        );
-        let _crd = tokio::time::timeout(CRD_ESTABLISH_TIMEOUT, establish).await??;
-        debug!("crd established");
+
+        debug!("found XlineCluster CRD, current version: {current_version}");
+
+        let mut add = true;
+        let mut storage = String::new();
+
+        let mut crds = ret?
+            .spec
+            .versions
+            .iter()
+            .cloned()
+            .map(|ver| {
+                let mut crd = definition.clone();
+                if ver.name == current_version.to_string() {
+                    add = false;
+                }
+                if ver.storage {
+                    storage = ver.name.clone();
+                }
+                crd.spec.versions = vec![ver];
+                crd
+            })
+            .collect::<Vec<_>>();
+
+        if add {
+            crds.push(definition.clone());
+        } else {
+            debug!("current version already exists, try to migrate");
+            self.try_migration(kube_client, crds, &current_version, &storage)
+                .await?;
+            return Ok(());
+        }
+
+        if !self.config.create_crd {
+            return Err(anyhow::anyhow!(
+                "cannot found XlineCluster CRD with version {current_version}, please set --create-crd to true or apply the CRD manually"
+            ));
+        }
+
+        let merged_crd = merge_crds(crds.clone(), &storage)?;
+        debug!("try to update crd");
+        _ = crd_api
+            .patch(
+                Cluster::crd_name(),
+                &PatchParams::apply(FIELD_MANAGER),
+                &Patch::Apply(merged_crd),
+            )
+            .await?;
+        Self::wait_crd_established(crd_api.clone(), Cluster::crd_name()).await?;
+
+        debug!("crd updated, try to migrate");
+        self.try_migration(kube_client, crds, &current_version, &storage)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Try to migrate CRD
+    #[allow(clippy::indexing_slicing)] // there is at least one element in `versions`
+    #[allow(clippy::expect_used)]
+    async fn try_migration(
+        &self,
+        kube_client: &Client,
+        crds: Vec<CustomResourceDefinition>,
+        current_version: &ApiVersion<Cluster>,
+        storage: &str,
+    ) -> Result<()> {
+        if !self.config.auto_migration {
+            debug!("auto migration is disabled, skip migration");
+            return Ok(());
+        }
+        if current_version.to_string() == storage {
+            // stop migration if current version is already in storage
+            debug!("current version is already in storage, skip migration");
+            return Ok(());
+        }
+        let versions: Vec<ApiVersion<Cluster>> = crds
+            .iter()
+            .map(|crd| crd.spec.versions[0].name.parse())
+            .collect::<Result<_>>()?;
+        if versions.iter().any(|ver| current_version < ver) {
+            // stop migration if current version is less than any version in `versions`
+            debug!("current version is less than some version in crd, skip migration");
+            return Ok(());
+        }
+        let group = kube::discovery::group(kube_client, Cluster::group(&()).as_ref()).await?;
+        let Some((ar, _)) = group
+            .versioned_resources(storage)
+            .into_iter()
+            .find(|res| res.0.kind == Cluster::kind(&())) else { return Ok(()) };
+        let api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &ar);
+        let clusters = api.list(&ListParams::default()).await?.items;
+        if !clusters.is_empty() && !current_version.compat_with(&storage.parse()?) {
+            // there is some clusters with storage version and is not compat with current version, stop migration
+            // TODO add a flag to these clusters to indicate that they need to be migrated
+            return Ok(());
+        }
+        // start migration as there is no cluster with storage version
+        let merged_crd = merge_crds(crds, &current_version.to_string())?;
+        let crd_api: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+        debug!("try to migrate crd from {storage} to {current_version}");
+        _ = crd_api
+            .patch(
+                Cluster::crd_name(),
+                &PatchParams::apply(FIELD_MANAGER),
+                &Patch::Apply(merged_crd),
+            )
+            .await?;
+        Self::wait_crd_established(crd_api.clone(), Cluster::crd_name()).await?;
         Ok(())
     }
 
