@@ -20,7 +20,7 @@ use tracing::{debug, info, warn};
 use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
-use crate::controller::cluster::{ClusterMetrics, Controller as ClusterController};
+use crate::controller::cluster::{ClusterController, ClusterMetrics};
 use crate::controller::{Controller, Metrics};
 use crate::crd::Cluster;
 use crate::router::{healthz, metrics, sidecar_state};
