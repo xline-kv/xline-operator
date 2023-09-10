@@ -7,4 +7,4 @@ mod v1alpha1;
 mod metrics;
 
 pub(crate) use metrics::ClusterMetrics;
-pub(crate) use v1alpha::ClusterController;
+pub(crate) use v1alpha1::ClusterController;

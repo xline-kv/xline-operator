@@ -12,4 +12,4 @@ pub(crate) mod v1alpha;
 pub(crate) mod v1alpha1;
 
 /// Current CRD `XineCluster`
-pub(crate) use v1alpha::Cluster;
+pub(crate) use v1alpha1::Cluster;

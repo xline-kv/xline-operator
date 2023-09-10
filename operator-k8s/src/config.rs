@@ -14,6 +14,9 @@ pub struct Config {
     /// Whether to create CRD regardless of current version on k8s
     #[arg(long, default_value = "false")]
     pub create_crd: bool,
+    /// Whether to enable auto migration if CRD version is less than current version
+    #[arg(long, default_value = "false")]
+    pub auto_migration: bool,
     /// The kubernetes cluster DNS suffix
     #[arg(long, default_value = "cluster.local")]
     pub cluster_suffix: String,
