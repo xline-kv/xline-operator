@@ -39,6 +39,14 @@ impl<CR> ApiVersion<CR> {
         Self::Stable(main, PhantomData)
     }
 
+    /// Check whether the version is compatible with the other version
+    /// We promise that we keep compatible with the same main version
+    #[must_use]
+    #[inline]
+    pub fn compat_with(&self, other: &Self) -> bool {
+        self.main_version() == other.main_version()
+    }
+
     /// return the main version
     fn main_version(&self) -> u32 {
         match *self {
