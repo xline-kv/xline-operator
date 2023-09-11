@@ -40,7 +40,7 @@ jobs:
           cargo build --release
           cd build
           cp ../target/release/xline-operator .
-          docker build . -t datenlord/xline-operator:latest -f operator.Dockerfile
+          docker build . -t xline-kv/xline-operator:latest -f operator.Dockerfile
       - name: 'E2E CI'
         env:
           KIND_CLUSTER_IMAGE: kindest/node:${{ matrix.k8s }}

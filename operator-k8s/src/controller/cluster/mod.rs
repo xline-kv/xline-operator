@@ -1,5 +1,3 @@
-/// Controller v1alpha
-mod v1alpha;
 /// Controller v1alpha1
 mod v1alpha1;
 

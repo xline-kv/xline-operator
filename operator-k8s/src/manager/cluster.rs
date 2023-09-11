@@ -1,23 +1,23 @@
-#![allow(unused)] // remove when implemented
+#![allow(unused)] // TODO remove
+
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use k8s_openapi::api::apps::v1::{StatefulSet, StatefulSetSpec};
+use k8s_openapi::api::core::v1::{
+    Container, ContainerPort, EnvVar, EnvVarSource, ObjectFieldSelector, PersistentVolumeClaim,
+    PodSpec, PodTemplateSpec, Service, ServicePort, ServiceSpec, VolumeMount,
+};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, OwnerReference};
+use kube::{Resource, ResourceExt};
+use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
 use crate::consts::{
     ANNOTATION_INHERIT_LABELS_PREFIX, DEFAULT_SIDECAR_PORT, DEFAULT_XLINE_PORT,
     LABEL_CLUSTER_COMPONENT, LABEL_CLUSTER_NAME, LABEL_OPERATOR_VERSION, SIDECAR_PORT_NAME,
     XLINE_POD_NAME_ENV, XLINE_PORT_NAME,
 };
-use crate::crd::v1alpha1::{BackupSpec, Cluster, ClusterSpec, StorageSpec};
-
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, EnvVar, EnvVarSource, GRPCAction, ObjectFieldSelector,
-    PersistentVolumeClaim, PersistentVolumeClaimVolumeSource, Pod, PodSpec, PodTemplateSpec, Probe,
-    Service, ServicePort, ServiceSpec, Volume, VolumeMount,
-};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
-use kube::{Resource, ResourceExt};
-use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
+use crate::crd::v1alpha1::Cluster;
 
 /// Read objects from `XlineCluster`
 pub(crate) struct Extractor<'a> {
@@ -29,7 +29,7 @@ pub(crate) struct Extractor<'a> {
 #[derive(Copy, Clone)]
 pub(crate) enum Component {
     /// A xline node
-    Node,
+    Nodes,
     /// A service
     Service,
     /// A backup job
@@ -40,7 +40,7 @@ impl Component {
     /// Get the component name
     fn label(&self) -> &str {
         match *self {
-            Component::Node => "node",
+            Component::Nodes => "nodes",
             Component::Service => "srv",
             Component::BackupJob => "job",
         }
@@ -59,7 +59,7 @@ impl<'a> Extractor<'a> {
     /// If the `XlineCluster` does not specified the xline ports (a port with name 'xline') or
     /// the sidecar ports (a port with name 'sidecar'), the default port (xline: 2379, sidecar: 2380)
     /// will be used.
-    fn extract_ports(&self) -> (ContainerPort, ContainerPort, Vec<ServicePort>) {
+    pub(crate) fn extract_ports(&self) -> (ContainerPort, ContainerPort, Vec<ServicePort>) {
         // expose all the container's ports
         let mut xline_port = None;
         let mut sidecar_port = None;
@@ -121,7 +121,7 @@ impl<'a> Extractor<'a> {
 
     /// Extract all PVC templates
     /// The PVC template is used to create PVC for every pod
-    fn extract_pvc_template(&self) -> Vec<PersistentVolumeClaim> {
+    pub(crate) fn extract_pvc_template(&self) -> Vec<PersistentVolumeClaim> {
         self.cluster
             .spec
             .backup
@@ -163,7 +163,6 @@ impl<'a> Extractor<'a> {
     /// Extract owner reference
     #[allow(clippy::expect_used)] // it is ok because xlinecluster always populated from the apiserver
     fn extract_owner_ref(&self) -> OwnerReference {
-        // unwrap controller_owner_ref is always safe
         self.cluster
             .controller_owner_ref(&())
             .expect("metadata doesn't have name or uid")
@@ -171,7 +170,7 @@ impl<'a> Extractor<'a> {
 
     /// Extract name, namespace
     #[allow(clippy::expect_used)] // it is ok because xlinecluster has field validation
-    fn extract_id(&self) -> (&str, &str) {
+    pub(crate) fn extract_id(&self) -> (&str, &str) {
         let name = self
             .cluster
             .metadata
@@ -235,17 +234,24 @@ impl Factory {
         format!("{cluster_name}-{}", component.label())
     }
 
+    /// Get the selector labels
+    fn selector_labels(name: &str, component: Component) -> BTreeMap<String, String> {
+        BTreeMap::from([
+            (LABEL_CLUSTER_NAME.to_owned(), name.to_owned()),
+            (
+                LABEL_CLUSTER_COMPONENT.to_owned(),
+                component.label().to_owned(),
+            ),
+        ])
+    }
+
     /// Get the general metadata
     fn general_metadata(&self, component: Component) -> ObjectMeta {
         let extractor = Extractor::new(self.cluster.as_ref());
         let mut labels = extractor.extract_inherit_labels();
         let (name, namespace) = extractor.extract_id();
         let owner_ref = extractor.extract_owner_ref();
-        _ = labels.insert(LABEL_CLUSTER_NAME.to_owned(), name.to_owned());
-        _ = labels.insert(
-            LABEL_CLUSTER_COMPONENT.to_owned(),
-            component.label().to_owned(),
-        );
+        labels.extend(Self::selector_labels(name, component));
         _ = labels.insert(
             LABEL_OPERATOR_VERSION.to_owned(),
             env!("CARGO_PKG_VERSION").to_owned(),
@@ -260,7 +266,7 @@ impl Factory {
     }
 
     /// Get the node headless service
-    fn node_service(&self) -> Service {
+    pub(crate) fn node_service(&self) -> Service {
         let extractor = Extractor::new(self.cluster.as_ref());
         let (_, _, service_ports) = extractor.extract_ports();
         let (name, _) = extractor.extract_id();
@@ -274,7 +280,7 @@ impl Factory {
                         (LABEL_CLUSTER_NAME.to_owned(), name.to_owned()),
                         (
                             LABEL_CLUSTER_COMPONENT.to_owned(),
-                            Component::Node.label().to_owned(),
+                            Component::Nodes.label().to_owned(),
                         ),
                     ]
                     .into(),
@@ -286,7 +292,6 @@ impl Factory {
     }
 
     /// Mount the additional volumes on the container
-    #[allow(clippy::unused_self)]
     fn mount_volume_on_container(&self, container: &mut Container) {
         let extractor = Extractor::new(self.cluster.as_ref());
         let volume_mount = extractor.extract_additional_volume_mount();
@@ -297,14 +302,15 @@ impl Factory {
     }
 
     /// Set the entrypoint of the container
-    fn set_command(&self, container: &mut Container, size: usize) {
+    fn set_command(&self, container: &mut Container) {
+        let size = self.cluster.spec.size;
         let extractor = Extractor::new(self.cluster.as_ref());
         let (name, namespace) = extractor.extract_id();
         let (xline_port, _, _) = extractor.extract_ports();
         let srv_name = Self::component_name(name, Component::Service);
         let mut members = vec![];
         for i in 0..=size {
-            let node_name = format!("{}-{i}", Self::component_name(name, Component::Node));
+            let node_name = format!("{}-{i}", Self::component_name(name, Component::Nodes));
             members.push(format!(
                 "{node_name}={node_name}.{srv_name}.{namespace}.svc.{}:{}",
                 self.cluster_suffix, xline_port.container_port
@@ -320,10 +326,10 @@ impl Factory {
     }
 
     /// Get the xline container
-    fn xline_container(&self, size: usize) -> Container {
+    fn xline_container(&self) -> Container {
         let mut container = self.cluster.spec.container.clone();
         self.mount_volume_on_container(&mut container);
-        self.set_command(&mut container, size);
+        self.set_command(&mut container);
         // we need to set the env variable to get the pod name in the container
         container.env = Some(vec![EnvVar {
             name: XLINE_POD_NAME_ENV.to_owned(),
@@ -340,12 +346,16 @@ impl Factory {
     }
 
     /// Get the node pod
-    fn pod_spec(&self, size: usize) -> PodTemplateSpec {
+    pub(crate) fn pod_spec(&self) -> PodTemplateSpec {
         let extractor = Extractor::new(self.cluster.as_ref());
         let (name, _) = extractor.extract_id();
-        let xline = self.xline_container(size);
+        let xline = self.xline_container();
+        let labels = Self::selector_labels(name, Component::Nodes);
         PodTemplateSpec {
-            metadata: Some(self.general_metadata(Component::Node)),
+            metadata: Some(ObjectMeta {
+                labels: Some(labels),
+                ..ObjectMeta::default()
+            }),
             spec: Some(PodSpec {
                 init_containers: Some(vec![]),
                 containers: vec![xline],
@@ -354,13 +364,34 @@ impl Factory {
             }),
         }
     }
+
+    /// Get the statefulset
+    pub(crate) fn sts(&self) -> StatefulSet {
+        let size = self.cluster.spec.size;
+        let extractor = Extractor::new(self.cluster.as_ref());
+        let (name, _) = extractor.extract_id();
+        let labels = Self::selector_labels(name, Component::Nodes);
+        StatefulSet {
+            metadata: self.general_metadata(Component::Nodes),
+            spec: Some(StatefulSetSpec {
+                replicas: Some(size),
+                selector: LabelSelector {
+                    match_expressions: None,
+                    match_labels: Some(labels),
+                },
+                service_name: Self::component_name(name, Component::Service),
+                volume_claim_templates: Some(extractor.extract_pvc_template()),
+                template: self.pod_spec(),
+                ..StatefulSetSpec::default()
+            }),
+            status: None,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use k8s_openapi::api::core::v1::{Affinity, NodeAffinity, PersistentVolumeClaimSpec};
-    use kube::CustomResourceExt;
 
     static CLUSTER_1: &str = r#"
 apiVersion: xlineoperator.xline.cloud/v1alpha
@@ -586,8 +617,8 @@ spec:
     #[test]
     fn factory_component_name_should_work() {
         assert_eq!(
-            Factory::component_name("my-xline-cluster", Component::Node),
-            "my-xline-cluster-node"
+            Factory::component_name("my-xline-cluster", Component::Nodes),
+            "my-xline-cluster-nodes"
         );
         assert_eq!(
             Factory::component_name("my-xline-cluster", Component::Service),
@@ -597,5 +628,80 @@ spec:
             Factory::component_name("my-xline-cluster", Component::BackupJob),
             "my-xline-cluster-job"
         );
+    }
+
+    #[test]
+    fn factory_general_metadata_should_work() {
+        let cluster_1_metadata = r#"
+labels:
+  app: my-xline-cluster
+  appNamespace: default
+  xlinecluster/component: nodes
+  xlinecluster/name: my-xline-cluster
+  xlinecluster/operator-version: 0.1.0
+name: my-xline-cluster-nodes
+namespace: default
+ownerReferences:
+- apiVersion: xlineoperator.xline.cloud/v1alpha1
+  controller: true
+  kind: XlineCluster
+  name: my-xline-cluster
+  uid: this-is-a-random-uid
+        "#
+        .trim();
+
+        let cluster_other_metadata = r#"
+labels:
+  xlinecluster/component: nodes
+  xlinecluster/name: my-xline-cluster
+  xlinecluster/operator-version: 0.1.0
+name: my-xline-cluster-nodes
+namespace: default
+ownerReferences:
+- apiVersion: xlineoperator.xline.cloud/v1alpha1
+  controller: true
+  kind: XlineCluster
+  name: my-xline-cluster
+  uid: this-is-a-random-uid
+        "#
+        .trim();
+
+        for (cluster_raw, metadata_str) in [
+            (CLUSTER_1, cluster_1_metadata),
+            (CLUSTER_2, cluster_other_metadata),
+            (CLUSTER_3, cluster_other_metadata),
+            (CLUSTER_4, cluster_other_metadata),
+        ] {
+            let mut cluster: Cluster = serde_yaml::from_str(cluster_raw).unwrap();
+            after_apiserver(&mut cluster);
+            let factory = Factory::new(Arc::new(cluster), "cluster.local");
+            let metadata = factory.general_metadata(Component::Nodes);
+            let outputs = serde_yaml::to_string(&metadata).unwrap();
+            assert_eq!(outputs.trim(), metadata_str);
+        }
+    }
+
+    #[test]
+    fn factory_node_service_should_work() {
+        let spec = r#"
+spec:
+  ports:
+  - name: xline
+    port: 2379
+  - name: sidecar
+    port: 2380
+  selector:
+    xlinecluster/component: nodes
+    xlinecluster/name: my-xline-cluster
+        "#
+        .trim();
+        for cluster_raw in [CLUSTER_1, CLUSTER_3, CLUSTER_4] {
+            let mut cluster: Cluster = serde_yaml::from_str(cluster_raw).unwrap();
+            after_apiserver(&mut cluster);
+            let factory = Factory::new(Arc::new(cluster), "cluster.local");
+            let service = factory.node_service();
+            let outputs = serde_yaml::to_string(&service).unwrap();
+            assert!(outputs.contains(spec));
+        }
     }
 }

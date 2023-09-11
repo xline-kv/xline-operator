@@ -1,11 +1,11 @@
+#![allow(unused)] // TODO remove
+
 use std::time::Duration;
 
 /// The default requeue duration to achieve eventual consistency
 pub(crate) const DEFAULT_REQUEUE_DURATION: Duration = Duration::from_secs(600);
 /// The field manager identifier of xline operator
 pub(crate) const FIELD_MANAGER: &str = "xlineoperator.datenlord.io";
-/// The emptyDir volume name of each pod if there is no data pvc specified
-pub(crate) const DATA_EMPTY_DIR_NAME: &str = "xline-data-empty-dir";
 /// The image used for cronjob to trigger backup
 /// The following command line tool should be available in this image
 /// 1. curl
