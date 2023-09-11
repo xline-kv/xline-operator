@@ -1,2 +1,2 @@
 /// `XlineCluster` manager
-mod cluster;
+pub(crate) mod cluster;
