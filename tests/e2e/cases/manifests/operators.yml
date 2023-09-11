@@ -17,5 +17,10 @@ spec:
     spec:
       containers:
         - name: xline-operator
-          image: datenlord/xline-operator:latest
+          image: xline-kv/xline-operator:latest
+          command:
+            - xline-operator
+          args:
+            - --auto-migration
+            - --create-crd
           imagePullPolicy: Never

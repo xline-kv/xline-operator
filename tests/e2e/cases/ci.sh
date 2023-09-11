@@ -8,12 +8,13 @@ _TEST_CI_OPERATOR_NAME="my-xline-operator"
 _TEST_CI_DNS_SUFFIX="cluster.local"
 _TEST_CI_NAMESPACE="default"
 _TEST_CI_XLINE_PORT="2379"
-_TEST_CI_LOG_SYNC_TIMEOUT=60
+_TEST_CI_LOG_SYNC_TIMEOUT=30
+_TEST_CI_START_SIZE=3
 
 function test::ci::_mk_endpoints() {
-  local endpoints="${_TEST_CI_CLUSTER_NAME}-0.${_TEST_CI_CLUSTER_NAME}.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+  local endpoints="${_TEST_CI_CLUSTER_NAME}-nodes-0.${_TEST_CI_CLUSTER_NAME}-srv.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   for ((i = 1; i < $1; i++)); do
-    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-${i}.${_TEST_CI_CLUSTER_NAME}.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-nodes-${i}.${_TEST_CI_CLUSTER_NAME}-srv.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   done
   echo "$endpoints"
 }
@@ -39,9 +40,9 @@ function test::ci::_start() {
   k8s::kubectl wait --for=condition=available deployment/$_TEST_CI_OPERATOR_NAME --timeout=300s >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation crd xlineclusters.xlineoperator.xline.cloud
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yml" >/dev/null 2>&1
-  k8s::kubectl::wait_resource_creation sts $_TEST_CI_CLUSTER_NAME
-  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'=3 sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
+  k8s::kubectl::wait_resource_creation sts "${_TEST_CI_CLUSTER_NAME}-nodes"
+  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'=$_TEST_CI_START_SIZE sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
+  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'=$_TEST_CI_START_SIZE sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
   log::info "cluster started"
 }
 
@@ -56,8 +57,8 @@ function test::ci::_teardown() {
 function test::ci::_scale_cluster() {
   log::info "scaling cluster to $1"
   k8s::kubectl scale xc $_TEST_CI_CLUSTER_NAME --replicas="$1" >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'="$1" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$1" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
+  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'="$1" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
+  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$1" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
   got=$(k8s::kubectl get xc $_TEST_CI_CLUSTER_NAME -o=jsonpath='{.spec.size}')
   if [ "$got" -ne "$1" ]; then
     echo "failed scale cluster"
@@ -81,13 +82,13 @@ function test::ci::_chaos() {
     kill=$((RANDOM % max_kill + 1))
     log::info "chaos: kill=$kill"
     for ((j = 0; j < kill; j++)); do
-      pod="${_TEST_CI_CLUSTER_NAME}-$((RANDOM % size))"
+      pod="${_TEST_CI_CLUSTER_NAME}-nodes-$((RANDOM % size))"
       log::info "chaos: kill pod=$pod"
       k8s::kubectl delete pod "$pod" --force --grace-period=0 2>/dev/null
     done
     test::ci::_etcdctl_expect "$endpoints" "put B $i" "OK" || return $?
     test::ci::_etcdctl_expect "$endpoints" "get B" "B\n$i" || return $?
-    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
+    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
     log::info "wait for log synchronization" && sleep $_TEST_CI_LOG_SYNC_TIMEOUT
   done
 }

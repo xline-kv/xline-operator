@@ -1,11 +1,11 @@
-apiVersion: xlineoperator.xline.cloud/v1alpha
+apiVersion: xlineoperator.xline.cloud/v1alpha1
 kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
   size: 3
   container:
-    image: "datenlord/xline:latest"
+    image: "ghcr.io/xline-kv/xline:latest"
     imagePullPolicy: IfNotPresent  # we will try to load image into cluster first.
     name: "my-xline"
     ports:

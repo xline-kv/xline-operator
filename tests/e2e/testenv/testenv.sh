@@ -15,11 +15,11 @@ function testenv::k8s::delete() {
 
 function testenv::k8s::load_images() {
   # xline image
-  xline_image="${XLINE_IMAGE:-datenlord/xline:latest}"
+  xline_image="ghcr.io/xline-kv/xline:latest"
   docker pull "$xline_image" >/dev/null
   testenv::k8s::kind::load_image "$xline_image"
   # xline operator image, this needs to be built first
-  testenv::k8s::kind::load_image datenlord/xline-operator:latest
+  testenv::k8s::kind::load_image xline-kv/xline-operator:latest
   # etcdctl image
   docker pull gcr.io/etcd-development/etcd:v3.5.5 >/dev/null
   testenv::k8s::kind::load_image gcr.io/etcd-development/etcd:v3.5.5
