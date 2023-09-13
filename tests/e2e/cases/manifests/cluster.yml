@@ -6,6 +6,9 @@ spec:
   size: 3
   container:
     image: "ghcr.io/xline-kv/xline:latest"
+    env:
+      - name: RUST_LOG
+        value: debug
     imagePullPolicy: IfNotPresent  # we will try to load image into cluster first.
     name: "my-xline"
     ports:

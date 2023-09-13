@@ -35,10 +35,21 @@ function k8s::kubectl::resource_exist() {
 function k8s::kubectl::wait_resource_creation() {
   interval="${3:-5}"
   KUBECTL_NAMESPACE="${KUBECTL_NAMESPACE:-default}"
+  retry_limit="${4:-10}"
+  retry_count=0
+
   while true; do
     if k8s::kubectl::resource_exist "$1" "$2"; then
       break
     fi
+
+    if [ "$retry_count" -ge "$retry_limit" ]; then
+      log::error "Exceeded retry limit for $1/$2 ($KUBECTL_NAMESPACE)."
+      break
+    fi
+
+    retry_count=$((retry_count + 1))
+
     log::info "Waiting for $1/$2 ($KUBECTL_NAMESPACE) to be created"
     sleep "$interval"
   done

@@ -17,6 +17,9 @@ spec:
     spec:
       containers:
         - name: xline-operator
+          env:
+            - name: RUST_LOG
+              value: debug
           image: xline-kv/xline-operator:latest
           command:
             - xline-operator
