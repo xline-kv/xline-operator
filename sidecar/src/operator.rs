@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use futures::{FutureExt, TryFutureExt};
+use operator_api::{K8sXlineHandle, LocalXlineHandle};
 use tokio::sync::watch::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tokio::time::interval;
@@ -15,7 +16,7 @@ use crate::backup::Provider;
 use crate::controller::Controller;
 use crate::controller::Error;
 use crate::routers;
-use crate::types::{Backup, Config, State, StatePayload};
+use crate::types::{Backend, Backup, Config, State, StatePayload};
 use crate::xline::XlineHandle;
 
 /// Sidecar operator
@@ -41,14 +42,7 @@ impl Operator {
     pub async fn run(&self) -> Result<()> {
         let (graceful_shutdown_event, _) = tokio::sync::watch::channel(());
         let forceful_shutdown = self.forceful_shutdown(&graceful_shutdown_event);
-        let backup = self.init_backup();
-        let handle = Arc::new(XlineHandle::open(
-            &self.config.name,
-            &self.config.container_name,
-            backup,
-            self.config.xline_port,
-            self.config.xline_members(),
-        )?);
+        let handle = Arc::new(self.init_xline_handle().await?);
         let revision = handle.revision_offline().unwrap_or(1);
         let state = Arc::new(Mutex::new(StatePayload {
             state: State::Start,
@@ -82,9 +76,10 @@ impl Operator {
         Ok(())
     }
 
-    /// Initialize backup
-    fn init_backup(&self) -> Option<Box<dyn Provider>> {
-        self.config
+    /// Initialize xline handle
+    async fn init_xline_handle(&self) -> Result<XlineHandle> {
+        let backup = self
+            .config
             .backup
             .as_ref()
             .and_then(|backup| match *backup {
@@ -95,7 +90,34 @@ impl Operator {
                     });
                     Some(pv)
                 }
-            })
+            });
+        let inner: Box<dyn operator_api::XlineHandle> = match self.config.backend.clone() {
+            Backend::K8s {
+                pod_name,
+                container_name,
+                namespace,
+            } => {
+                let handle = K8sXlineHandle::new_with_default(
+                    pod_name,
+                    container_name,
+                    &namespace,
+                    self.config.start_cmd.clone(),
+                )
+                .await;
+                Box::new(handle)
+            }
+            Backend::Local => {
+                let handle = LocalXlineHandle::new(self.config.start_cmd.clone());
+                Box::new(handle)
+            }
+        };
+        XlineHandle::open(
+            &self.config.name,
+            backup,
+            inner,
+            self.config.xline_port,
+            self.config.xline_members(),
+        )
     }
 
     /// Forceful shutdown

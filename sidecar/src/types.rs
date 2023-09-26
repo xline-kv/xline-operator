@@ -11,8 +11,6 @@ use std::time::Duration;
 pub struct Config {
     /// Name of this node
     pub name: String,
-    /// Xline container name
-    pub container_name: String,
     /// The xline server port
     pub xline_port: u16,
     /// The operator web server port
@@ -25,6 +23,25 @@ pub struct Config {
     pub members: HashMap<String, String>,
     /// The xline start cmd
     pub start_cmd: String,
+    /// The backend
+    pub backend: Backend,
+}
+
+/// Sidecar backend, it determinate how xline could be setup
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Backend {
+    /// K8s backend
+    K8s {
+        /// The pod name of this node
+        pod_name: String,
+        /// The xline container name, used to attach on it
+        container_name: String,
+        /// The namespace of this node
+        namespace: String,
+    },
+    /// Local backend
+    Local,
 }
 
 /// Backup storage config

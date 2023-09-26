@@ -3,6 +3,8 @@ mod xline;
 
 pub mod consts;
 
+pub use xline::{K8sXlineHandle, LocalXlineHandle, XlineHandle};
+
 use serde::{Deserialize, Serialize};
 
 /// Heartbeat status

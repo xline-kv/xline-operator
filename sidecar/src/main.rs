@@ -138,20 +138,20 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
 use tracing::debug;
 
 use xline_sidecar::operator::Operator;
-use xline_sidecar::types::{Backup, Config};
+use xline_sidecar::types::{Backend, Backup, Config};
 
 /// Command line interface
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// The name of this node
+    /// The name of this sidecar, and is shared with xline node name
     #[arg(long)]
-    name: String, // used in xline and deployment operator to identify this node
+    name: String,
     /// The host ip of each member, [node_name] -> [node_host]
     #[arg(long, value_parser = parse_members)]
     members: HashMap<String, String>,
@@ -161,9 +161,6 @@ struct Cli {
     /// Operator web server port
     #[arg(long)]
     operator_port: u16,
-    /// The xline container name
-    #[arg(long)]
-    container_name: String,
     /// Check health interval, default 20 [unit: seconds]
     #[arg(long, default_value = "20")]
     check_interval: u64,
@@ -186,6 +183,12 @@ struct Cli {
     /// e.g "--jaeger_offline true"
     #[arg(long)]
     additional: Option<String>,
+    /// The sidecar backend, when you use different operators, the backend may different.
+    /// e.g:
+    ///   "k8s,pod=xline-pod-1,container=xline,namespace=default" for k8s backend
+    ///   "local" for local backend
+    #[arg(long, value_parser=parse_backend)]
+    backend: Backend,
 }
 
 impl From<Cli> for Config {
@@ -193,12 +196,12 @@ impl From<Cli> for Config {
         let mut config = Self {
             start_cmd: String::new(),
             name: value.name.clone(),
-            container_name: value.container_name,
             xline_port: value.xline_port,
             operator_port: value.operator_port,
             check_interval: std::time::Duration::from_secs(value.check_interval),
             backup: value.backup,
             members: value.members,
+            backend: value.backend,
         };
         config.start_cmd = format!(
             "{} --name {} --members {} --storage-engine {} --data-dir {}",
@@ -228,11 +231,10 @@ impl From<Cli> for Config {
 
 /// parse backup type
 fn parse_backup_type(value: &str) -> Result<Backup, String> {
-    debug!("parse backup type: {}", value);
-    let mut items: Vec<_> = value.split([':', ' ', ',', '-']).collect();
-    if items.is_empty() {
+    if value.is_empty() {
         return Err("backup type is empty".to_owned());
     }
+    let mut items: Vec<_> = value.split([':', ' ', ',', '-']).collect();
     let backup_type = items.remove(0);
     match backup_type {
         "s3" => {
@@ -261,19 +263,55 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
     }
 }
 
+/// Parse backend
+fn parse_backend(value: &str) -> Result<Backend, String> {
+    if value.is_empty() {
+        return Err("backend is empty".to_owned());
+    }
+    let mut items: Vec<_> = value.split(',').collect();
+    let backend = items.remove(0);
+    match backend {
+        "k8s" => {
+            let mut pod_name = String::new();
+            let mut container_name = String::new();
+            let mut namespace = String::new();
+            while let Some(item) = items.pop() {
+                let Some((k, v)) = item.split_once('=') else {
+                    return Err(format!("k8s backend got unexpected argument {item}, expect <key>=<value>"));
+                };
+                match k {
+                    "pod" => pod_name = v.to_owned(),
+                    "container" => container_name = v.to_owned(),
+                    "namespace" => namespace = v.to_owned(),
+                    _ => return Err(format!("k8s backend got unexpect argument {item}, expect one of 'pod', 'container', 'namespace'")),
+                }
+            }
+            if pod_name.is_empty() || container_name.is_empty() || namespace.is_empty() {
+                return Err("k8s backend must set 'pod', 'container', 'namespace'".to_owned());
+            }
+            Ok(Backend::K8s {
+                pod_name,
+                container_name,
+                namespace,
+            })
+        }
+        "local" => Ok(Backend::Local),
+        _ => Err(format!("unknown backend: {backend}")),
+    }
+}
+
 /// parse members from string
 /// # Errors
 /// Return error when pass wrong args
 #[inline]
-pub fn parse_members(s: &str) -> Result<HashMap<String, String>> {
+pub fn parse_members(s: &str) -> Result<HashMap<String, String>, String> {
     let mut map = HashMap::new();
     for pair in s.split(',') {
         if let Some((id, addr)) = pair.split_once('=') {
             let _ignore = map.insert(id.to_owned(), addr.to_owned());
         } else {
-            return Err(anyhow!(
-                "parse the pair '{}' error, expect '<id>=<addr>'",
-                pair
+            return Err(format!(
+                "parse the pair '{pair}' error, expect '<id>=<addr>'",
             ));
         }
     }
@@ -292,10 +330,11 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::Cli;
+    use crate::{parse_backend, parse_backup_type, parse_members, Cli};
     use clap::Parser;
     use std::collections::HashMap;
-    use xline_sidecar::types::{Backup, Config};
+    use std::path::PathBuf;
+    use xline_sidecar::types::{Backend, Backup, Config};
 
     fn full_parameter() -> Vec<&'static str> {
         vec![
@@ -304,7 +343,6 @@ mod test {
             "--members=node1=127.0.0.1",
             "--xline-port=2379",
             "--operator-port=2380",
-            "--container-name=xline",
             "--check-interval=60",
             "--backup=s3:bucket_name",
             "--xline-executable=/usr/local/bin/xline",
@@ -312,7 +350,121 @@ mod test {
             "--data-dir=/usr/local/xline/data-dir",
             "--is-leader",
             "--additional='--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'",
+            "--backend=k8s,pod=xline-pod-1,container=xline,namespace=default",
         ]
+    }
+
+    #[test]
+    fn test_parse_backup_type() {
+        let test_cases = [
+            ("", Err("backup type is empty".to_owned())),
+            (
+                "s3:bucket_name",
+                Ok(Backup::S3 {
+                    bucket: "bucket_name".to_owned(),
+                }),
+            ),
+            (
+                "s3:bucket:name",
+                Err("s3 backup type requires 1 arguments, got 2".to_owned()),
+            ),
+            (
+                "s3",
+                Err("s3 backup type requires 1 arguments, got 0".to_owned()),
+            ),
+            (
+                "pv:/home",
+                Ok(Backup::PV {
+                    path: PathBuf::from("/home"),
+                }),
+            ),
+            (
+                "pv:/home:/paopao",
+                Err("pv backup type requires 1 argument, got 2".to_owned()),
+            ),
+            (
+                "pv",
+                Err("pv backup type requires 1 argument, got 0".to_owned()),
+            ),
+            (
+                "_invalid_",
+                Err("unknown backup type: _invalid_".to_owned()),
+            ),
+        ];
+        for (test_case, res) in test_cases {
+            assert_eq!(parse_backup_type(test_case), res);
+        }
+    }
+
+    #[test]
+    fn test_parse_backend() {
+        let test_cases = [
+            (
+                "k8s,pod=my-pod,container=my-container,namespace=my-namespace",
+                Ok(Backend::K8s {
+                    pod_name: "my-pod".to_owned(),
+                    container_name: "my-container".to_owned(),
+                    namespace: "my-namespace".to_owned(),
+                }),
+            ),
+            ("local", Ok(Backend::Local)),
+            ("", Err("backend is empty".to_owned())),
+            (
+                "k8s,pod=my-pod,invalid-arg,namespace=my-namespace",
+                Err(
+                    "k8s backend got unexpected argument invalid-arg, expect <key>=<value>"
+                        .to_owned(),
+                ),
+            ),
+            (
+                "k8s,pod=my-pod,container=my-container",
+                Err("k8s backend must set 'pod', 'container', 'namespace'".to_owned()),
+            ),
+            (
+                "unknown-backend",
+                Err("unknown backend: unknown-backend".to_owned()),
+            ),
+        ];
+        for (input, expected) in test_cases {
+            let result = parse_backend(input);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_members() {
+        let test_cases = vec![
+            (
+                "id1=addr1,id2=addr2,id3=addr3",
+                Ok([("id1", "addr1"), ("id2", "addr2"), ("id3", "addr3")]
+                    .iter()
+                    .map(|&(id, addr)| (id.to_owned(), addr.to_owned()))
+                    .collect()),
+            ),
+            (
+                "id1=addr1",
+                Ok(std::iter::once(&("id1", "addr1"))
+                    .map(|&(id, addr)| (id.to_owned(), addr.to_owned()))
+                    .collect()),
+            ),
+            (
+                "",
+                Err("parse the pair '' error, expect '<id>=<addr>'".to_owned()),
+            ),
+            (
+                "id1=addr1,id2",
+                Err("parse the pair 'id2' error, expect '<id>=<addr>'".to_owned()),
+            ),
+            (
+                "id1=addr1,id2=addr2,",
+                Err("parse the pair '' error, expect '<id>=<addr>'".to_owned()),
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = parse_members(input);
+            assert_eq!(result, expected);
+        }
     }
 
     #[test]
@@ -325,7 +477,6 @@ mod test {
         );
         assert_eq!(cli.xline_port, 2379);
         assert_eq!(cli.operator_port, 2380);
-        assert_eq!(cli.container_name, "xline");
         assert_eq!(cli.check_interval, 60);
         assert_eq!(
             cli.backup,
@@ -343,6 +494,14 @@ mod test {
                 "'--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'"
                     .to_owned()
             )
+        );
+        assert_eq!(
+            cli.backend,
+            Backend::K8s {
+                pod_name: "xline-pod-1".to_owned(),
+                container_name: "xline".to_owned(),
+                namespace: "default".to_owned(),
+            }
         );
     }
 

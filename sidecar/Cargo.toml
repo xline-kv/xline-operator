@@ -38,3 +38,4 @@ tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 uuid = { version = "1.4.1", features = ["v4"] }
 xline-client = { git = "https://github.com/xline-kv/Xline.git", package = "xline-client" }
 xlineapi = { git = "https://github.com/xline-kv/Xline.git", package = "xlineapi" }
+operator-api = { path = "../operator-api" }

@@ -3,6 +3,7 @@
 #![allow(clippy::unused_self)] // TODO remove as it is implemented
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -50,8 +51,6 @@ pub(crate) const XLINE_TABLES: [&str; 6] = [
 pub(crate) struct XlineHandle {
     /// The name of the operator
     name: String,
-    /// The xline container name in the pod
-    container_name: String,
     /// The xline backup provider
     backup: Option<Box<dyn Provider>>,
     /// The xline client
@@ -64,31 +63,33 @@ pub(crate) struct XlineHandle {
     xline_members: HashMap<String, String>,
     /// Health retires of xline client
     is_healthy_retries: usize,
+    /// The detailed xline process handle
+    inner: Box<dyn operator_api::XlineHandle>,
 }
 
 impl XlineHandle {
     /// Create the xline handle but not start the xline node
     pub(crate) fn open(
         name: &str,
-        container_name: &str,
         backup: Option<Box<dyn Provider>>,
+        inner: Box<dyn operator_api::XlineHandle>,
         xline_port: u16,
         xline_members: HashMap<String, String>,
     ) -> Result<Self> {
-        debug!("name: {name}, container_name: {container_name}, backup: {backup:?}, xline_port: {xline_port}");
+        debug!("name: {name}, backup: {backup:?}, xline_port: {xline_port}");
         let endpoint: Endpoint = format!("http://127.0.0.1:{xline_port}").parse()?;
         let channel = Channel::balance_list(std::iter::once(endpoint));
         let health_client = HealthClient::new(channel);
         let engine = Engine::new(EngineType::Rocks(DEFAULT_DATA_DIR.parse()?), &XLINE_TABLES)?;
         Ok(Self {
             name: name.to_owned(),
-            container_name: container_name.to_owned(),
             backup,
             health_client,
             engine,
             client: None, // TODO maybe we could initialize the client here when xline#423 is merged
             xline_members,
             is_healthy_retries: 5,
+            inner,
         })
     }
 
@@ -117,8 +118,7 @@ impl XlineHandle {
         // the cluster is started if any of the connection is successful
         let cluster_started = futs.any(|res| async move { res.is_ok() }).await;
 
-        // start xline server here
-        // TODO define a trait to abstract the start of xline server
+        self.inner.start().await?;
 
         let client = Client::connect(self.xline_members.values(), ClientOptions::default()).await?;
         if cluster_started {
@@ -130,11 +130,10 @@ impl XlineHandle {
     }
 
     /// Stop the xline server
-    pub(crate) async fn stop(&self) -> Result<()> {
+    pub(crate) async fn stop(&mut self) -> Result<()> {
         // Step 1: Kill the xline node
         // Step 2: Remove the xline node from the cluster if the cluster exist
-
-        // kill xline server here
+        self.inner.kill().await?;
 
         if self.is_healthy().await {
             let _cluster_client = self.client().cluster_client();
