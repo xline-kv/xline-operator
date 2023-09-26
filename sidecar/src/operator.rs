@@ -47,6 +47,7 @@ impl Operator {
             &self.config.container_name,
             backup,
             self.config.xline_port,
+            self.config.xline_members(),
         )?);
         let revision = handle.revision_offline().unwrap_or(1);
         let state = Arc::new(Mutex::new(StatePayload {

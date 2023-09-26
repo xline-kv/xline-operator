@@ -2,8 +2,7 @@
 #![allow(clippy::unnecessary_wraps)] // TODO remove as it is implemented
 #![allow(clippy::unused_self)] // TODO remove as it is implemented
 
-use crate::backup::Metadata;
-use crate::backup::Provider;
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use bytes::Buf;
@@ -16,6 +15,9 @@ use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
 use xline_client::types::kv::RangeRequest;
 use xline_client::Client;
+
+use crate::backup::Metadata;
+use crate::backup::Provider;
 
 /// Meta table name
 pub(crate) const META_TABLE: &str = "meta";
@@ -55,15 +57,20 @@ pub(crate) struct XlineHandle {
     health_client: HealthClient<Channel>,
     /// The rocks db engine
     engine: Engine,
+    /// The xline members
+    xline_members: HashMap<String, String>,
+    /// Health retires of xline client
+    is_healthy_retries: usize,
 }
 
 impl XlineHandle {
-    /// Start the xline in pod and return the handle
+    /// Create the xline handle but not start the xline node
     pub(crate) fn open(
         name: &str,
         container_name: &str,
         backup: Option<Box<dyn Provider>>,
         xline_port: u16,
+        xline_members: HashMap<String, String>,
     ) -> Result<Self> {
         debug!("name: {name}, container_name: {container_name}, backup: {backup:?}, xline_port: {xline_port}");
         let endpoint: Endpoint = format!("http://127.0.0.1:{xline_port}").parse()?;
@@ -77,6 +84,8 @@ impl XlineHandle {
             health_client,
             engine,
             client: None, // TODO maybe we could initialize the client here when xline#423 is merged
+            xline_members,
+            is_healthy_retries: 5,
         })
     }
 
@@ -89,6 +98,10 @@ impl XlineHandle {
 
     /// Start the xline server
     pub(crate) fn start(&self) -> Result<()> {
+        // Step 1: Check if there is any node running
+        // Step 2: If there is no node running, start single node cluster
+        // Step 3: If there are some nodes running, start the node as a member to join the cluster
+
         // TODO start xline server
         Ok(())
     }
@@ -97,6 +110,22 @@ impl XlineHandle {
     pub(crate) fn stop(&self) -> Result<()> {
         // TODO stop xline server
         Ok(())
+    }
+
+    /// Return the xline cluster health by sending kv requests
+    pub(crate) async fn is_healthy(&self) -> bool {
+        let client = self.client().kv_client();
+        for _ in 0..self.is_healthy_retries {
+            // send linearized request to check if the xline server is healthy
+            if client
+                .range(RangeRequest::new("health").with_serializable(false))
+                .await
+                .is_ok()
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Return the xline server running state by sending a `gRPC` health request

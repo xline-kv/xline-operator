@@ -3,11 +3,12 @@ pub(crate) mod pv;
 /// The s3 backup
 pub(crate) mod s3;
 
-use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use tonic::Streaming;
 use xlineapi::SnapshotResponse;
 
