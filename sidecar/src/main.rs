@@ -136,13 +136,10 @@
 )]
 
 use std::collections::HashMap;
-use std::fs::write;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand};
-use tera::{Context, Tera};
+use clap::Parser;
 use tracing::debug;
 
 use xline_sidecar::operator::Operator;
@@ -155,57 +152,78 @@ struct Cli {
     /// The name of this node
     #[arg(long)]
     name: String, // used in xline and deployment operator to identify this node
-
     /// The host ip of each member, [node_name] -> [node_host]
     #[arg(long, value_parser = parse_members)]
     members: HashMap<String, String>,
-
     /// The xline server port
     #[arg(long)]
     xline_port: u16,
-
-    /// Sub commands
-    #[command(subcommand)]
-    command: Commands,
+    /// Operator web server port
+    #[arg(long)]
+    operator_port: u16,
+    /// The xline container name
+    #[arg(long)]
+    container_name: String,
+    /// Check health interval, default 20 [unit: seconds]
+    #[arg(long, default_value = "20")]
+    check_interval: u64,
+    /// Enable backup, choose a storage type, e.g. s3:bucket_name or pv:/path/to/dir
+    #[arg(long, value_parser=parse_backup_type)]
+    backup: Option<Backup>,
+    /// The xline executable path, default "xline"
+    #[arg(long, default_value = "xline")]
+    xline_executable: String,
+    /// Storage engine used in xline
+    #[arg(long)]
+    storage_engine: String,
+    /// The directory path contains xline server data if the storage_engine is rocksdb
+    #[arg(long)]
+    data_dir: PathBuf,
+    /// Whether this node is leader or not
+    #[arg(long, default_value = "false")]
+    is_leader: bool,
+    /// Additional arguments, it will be appended behind the required parameters,
+    /// e.g "--jaeger_offline true"
+    #[arg(long)]
+    additional: Option<String>,
 }
 
-/// Sub commands
-#[allow(variant_size_differences)] // required by clap
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Run sidecar operator
-    Run {
-        /// The xline container name
-        #[arg(long)]
-        container_name: String,
-        /// Operator web server port
-        #[arg(long)]
-        operator_port: u16,
-        /// Check health interval, default 20 [unit: seconds]
-        #[arg(long, default_value = "20")]
-        check_interval: u64,
-        /// Enable backup, choose a storage type, e.g. s3:bucket_name:secret_key or pv:/path/to/dir
-        #[arg(long, value_parser=parse_backup_type)]
-        backup: Option<Backup>,
-    },
-    /// Generate xline configuration file
-    Gen {
-        /// The file path where the xline kvserver reads configs
-        #[arg(long)]
-        path: PathBuf,
-        /// Storage engine used in xline
-        #[arg(long)]
-        storage_engine: String,
-        /// The directory path contains xline kvserver data is the storage_engine is rocksdb
-        #[arg(long)]
-        data_dir: PathBuf,
-        /// Whether this node is leader or not
-        #[arg(long)]
-        is_leader: bool,
-        /// Additional arguments [format: JSON]
-        #[arg(long)]
-        additional: Option<String>,
-    },
+impl From<Cli> for Config {
+    fn from(value: Cli) -> Self {
+        let mut config = Self {
+            start_cmd: String::new(),
+            name: value.name.clone(),
+            container_name: value.container_name,
+            xline_port: value.xline_port,
+            operator_port: value.operator_port,
+            check_interval: std::time::Duration::from_secs(value.check_interval),
+            backup: value.backup,
+            members: value.members,
+        };
+        config.start_cmd = format!(
+            "{} --name {} --members {} --storage-engine {} --data-dir {}",
+            value.xline_executable,
+            value.name,
+            config
+                .xline_members()
+                .into_iter()
+                .map(|(name, addr)| format!("{name}={addr}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            value.storage_engine,
+            value.data_dir.to_string_lossy(),
+        );
+        if value.is_leader {
+            config.start_cmd.push(' ');
+            config.start_cmd.push_str("--is-leader");
+        }
+        if let Some(additional) = value.additional {
+            config.start_cmd.push(' ');
+            let pat: &[_] = &['\'', '"'];
+            config.start_cmd.push_str(additional.trim_matches(pat));
+        }
+        config
+    }
 }
 
 /// parse backup type
@@ -262,9 +280,6 @@ pub fn parse_members(s: &str) -> Result<HashMap<String, String>> {
     Ok(map)
 }
 
-/// Xline config template
-pub static XLINE_CONF: &str = include_str!("../../assets/xline_conf.tera");
-
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -272,53 +287,68 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     debug!("{:?}", cli);
 
-    match cli.command {
-        Commands::Run {
-            container_name,
-            operator_port,
-            check_interval,
-            backup,
-        } => {
-            let config = Config::new(
-                cli.name,
-                container_name,
-                cli.members,
-                cli.xline_port,
-                operator_port,
-                Duration::from_secs(check_interval),
-                backup,
-            );
-            Operator::new(config).run().await
-        }
-        Commands::Gen {
-            path,
-            storage_engine,
-            data_dir,
-            is_leader,
-            additional,
-        } => {
-            let mut ctx = Context::new();
-            let members: HashMap<_, _> = cli
-                .members
-                .into_iter()
-                .map(|(node_name, host)| (node_name, format!("{host}:{}", cli.xline_port)))
-                .collect();
-            ctx.insert("name", &cli.name);
-            ctx.insert("is_leader", &is_leader);
-            ctx.insert("members", &members);
-            ctx.insert("storage_engine", &storage_engine);
-            ctx.insert("data_dir", &data_dir);
-            let additional = if let Some(json) = additional.as_deref() {
-                let value: serde_json::Value = serde_json::from_str(json)?;
-                toml::to_string_pretty(&value)?
-            } else {
-                String::new()
-            };
-            ctx.insert("additional", &additional);
-            let conf = Tera::one_off(XLINE_CONF, &ctx, false)?;
-            debug!("generate config: \n{}", conf);
-            write(path, conf)?;
-            Ok(())
-        }
+    Operator::new(cli.into()).run().await
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Cli;
+    use clap::Parser;
+    use std::collections::HashMap;
+    use xline_sidecar::types::{Backup, Config};
+
+    fn full_parameter() -> Vec<&'static str> {
+        vec![
+            "sidecar_exe",
+            "--name=node1",
+            "--members=node1=127.0.0.1",
+            "--xline-port=2379",
+            "--operator-port=2380",
+            "--container-name=xline",
+            "--check-interval=60",
+            "--backup=s3:bucket_name",
+            "--xline-executable=/usr/local/bin/xline",
+            "--storage-engine=rocksdb",
+            "--data-dir=/usr/local/xline/data-dir",
+            "--is-leader",
+            "--additional='--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'",
+        ]
+    }
+
+    #[test]
+    fn test_parse_cli_should_success() {
+        let cli = Cli::parse_from(full_parameter());
+        assert_eq!(cli.name, "node1");
+        assert_eq!(
+            cli.members,
+            HashMap::from([("node1".to_owned(), "127.0.0.1".to_owned())])
+        );
+        assert_eq!(cli.xline_port, 2379);
+        assert_eq!(cli.operator_port, 2380);
+        assert_eq!(cli.container_name, "xline");
+        assert_eq!(cli.check_interval, 60);
+        assert_eq!(
+            cli.backup,
+            Some(Backup::S3 {
+                bucket: "bucket_name".to_owned(),
+            })
+        );
+        assert_eq!(cli.xline_executable, "/usr/local/bin/xline");
+        assert_eq!(cli.storage_engine, "rocksdb");
+        assert_eq!(cli.data_dir.to_string_lossy(), "/usr/local/xline/data-dir");
+        assert!(cli.is_leader);
+        assert_eq!(
+            cli.additional,
+            Some(
+                "'--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'"
+                    .to_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn test_gen_start_cmd() {
+        let config: Config = Cli::parse_from(full_parameter()).into();
+        assert_eq!(config.start_cmd, "/usr/local/bin/xline --name node1 --members node1=127.0.0.1:2379 --storage-engine rocksdb --data-dir /usr/local/xline/data-dir --is-leader --auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem");
     }
 }

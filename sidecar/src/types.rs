@@ -7,7 +7,7 @@ use std::time::Duration;
 
 /// Sidecar operator config
 #[derive(Debug, Clone)]
-#[non_exhaustive]
+#[allow(clippy::exhaustive_structs)] // it is exhaustive
 pub struct Config {
     /// Name of this node
     pub name: String,
@@ -22,11 +22,13 @@ pub struct Config {
     /// Backup storage config
     pub backup: Option<Backup>,
     /// Operators hosts, [pod_name]->[pod_host]
-    members: HashMap<String, String>,
+    pub members: HashMap<String, String>,
+    /// The xline start cmd
+    pub start_cmd: String,
 }
 
 /// Backup storage config
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Backup {
     /// S3 storage
@@ -42,31 +44,10 @@ pub enum Backup {
 }
 
 impl Config {
-    /// Constructor
+    /// Get the operator members
     #[must_use]
     #[inline]
-    pub fn new(
-        name: String,
-        container_name: String,
-        members: HashMap<String, String>,
-        xline_port: u16,
-        operator_port: u16,
-        check_interval: Duration,
-        backup: Option<Backup>,
-    ) -> Self {
-        Self {
-            name,
-            container_name,
-            xline_port,
-            operator_port,
-            check_interval,
-            backup,
-            members,
-        }
-    }
-
-    /// Get the operator members
-    pub(crate) fn operator_members(&self) -> HashMap<String, String> {
+    pub fn operator_members(&self) -> HashMap<String, String> {
         self.members
             .clone()
             .into_iter()
@@ -75,7 +56,9 @@ impl Config {
     }
 
     /// Get the xline members
-    pub(crate) fn xline_members(&self) -> HashMap<String, String> {
+    #[must_use]
+    #[inline]
+    pub fn xline_members(&self) -> HashMap<String, String> {
         self.members
             .clone()
             .into_iter()
