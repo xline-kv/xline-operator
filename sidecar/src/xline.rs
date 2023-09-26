@@ -3,10 +3,13 @@
 #![allow(clippy::unused_self)] // TODO remove as it is implemented
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use bytes::Buf;
 use engine::{Engine, EngineType, StorageEngine};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use operator_api::consts::DEFAULT_DATA_DIR;
 use tonic::transport::{Channel, Endpoint};
 use tonic_health::pb::health_check_response::ServingStatus;
@@ -14,7 +17,7 @@ use tonic_health::pb::health_client::HealthClient;
 use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
 use xline_client::types::kv::RangeRequest;
-use xline_client::Client;
+use xline_client::{Client, ClientOptions};
 
 use crate::backup::Metadata;
 use crate::backup::Provider;
@@ -97,18 +100,46 @@ impl XlineHandle {
     }
 
     /// Start the xline server
-    pub(crate) fn start(&self) -> Result<()> {
+    pub(crate) async fn start(&mut self) -> Result<()> {
         // Step 1: Check if there is any node running
         // Step 2: If there is no node running, start single node cluster
         // Step 3: If there are some nodes running, start the node as a member to join the cluster
+        let endpoints = self
+            .xline_members
+            .values()
+            .map(|addr| {
+                Ok::<_, tonic::transport::Error>(
+                    Endpoint::from_shared(addr.clone())?.connect_timeout(Duration::from_secs(3)),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let futs: FuturesUnordered<_> = endpoints.iter().map(Endpoint::connect).collect();
+        // the cluster is started if any of the connection is successful
+        let cluster_started = futs.any(|res| async move { res.is_ok() }).await;
 
-        // TODO start xline server
+        // start xline server here
+        // TODO define a trait to abstract the start of xline server
+
+        let client = Client::connect(self.xline_members.values(), ClientOptions::default()).await?;
+        if cluster_started {
+            let _cluster_client = client.cluster_client();
+            // send membership change here
+        }
+        let _ig = self.client.replace(client);
         Ok(())
     }
 
     /// Stop the xline server
-    pub(crate) fn stop(&self) -> Result<()> {
-        // TODO stop xline server
+    pub(crate) async fn stop(&self) -> Result<()> {
+        // Step 1: Kill the xline node
+        // Step 2: Remove the xline node from the cluster if the cluster exist
+
+        // kill xline server here
+
+        if self.is_healthy().await {
+            let _cluster_client = self.client().cluster_client();
+            // send membership change here
+        }
         Ok(())
     }
 
