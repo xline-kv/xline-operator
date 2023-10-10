@@ -218,7 +218,7 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
     let backup_type = items.remove(0);
     match backup_type {
         "s3" => {
-            if items.len() != 2 {
+            if items.len() != 1 {
                 return Err(format!(
                     "s3 backup type requires 1 arguments, got {}",
                     items.len()

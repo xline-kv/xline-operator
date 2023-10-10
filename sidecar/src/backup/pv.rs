@@ -47,19 +47,20 @@ impl Provider for Pv {
         };
         let mut item = item?;
         let mut size = item.blob.len();
-        dst.write_all(&item.blob).await?;
+        let mut buf = item.blob;
         while item.remaining_bytes > 0 {
             let Some(got) = src.next().await else {
                 return Err(anyhow!("get the item from source failed"))
             };
             item = got?;
             size.add_assign(item.blob.len());
-            dst.write_all(&item.blob).await?;
+            buf.extend(item.blob);
         }
         debug!(
             "backup snapshot file: {filename}, size: {} KB",
             size.div(1024)
         );
+        dst.write_all(&buf).await?;
         Ok(())
     }
 
