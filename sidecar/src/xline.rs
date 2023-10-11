@@ -86,7 +86,7 @@ impl XlineHandle {
             backup,
             health_client,
             engine,
-            client: None, // TODO maybe we could initialize the client here when xline#423 is merged
+            client: None,
             xline_members,
             is_healthy_retries: 5,
             inner,

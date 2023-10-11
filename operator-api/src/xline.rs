@@ -10,7 +10,7 @@ use std::process::{Child, Command};
 #[async_trait]
 pub trait XlineHandle: Debug + Send + Sync + 'static {
     /// start a xline node
-    async fn start(&mut self) -> anyhow::Result<()>; // we truly dont care about what failure happened when start, it just failed
+    async fn start(&mut self) -> anyhow::Result<()>; // we dont care about what failure happened when start, it just failed
 
     /// kill a xline node
     async fn kill(&mut self) -> anyhow::Result<()>;
@@ -37,11 +37,15 @@ impl LocalXlineHandle {
 #[async_trait]
 impl XlineHandle for LocalXlineHandle {
     async fn start(&mut self) -> anyhow::Result<()> {
-        if let Some((exe, args)) = self.start_cmd.split_once(' ') {
-            let proc = Command::new(exe).args(args.split(' ')).spawn()?;
-            self.child_proc = Some(proc);
-        }
-        unreachable!("the start_cmd must be valid");
+        let mut cmds = self.start_cmd.split_whitespace();
+        let Some((exe, args)) = cmds
+            .next()
+            .map(|exe| (exe, cmds.collect::<Vec<_>>())) else {
+            unreachable!("the start_cmd must be valid");
+        };
+        let proc = Command::new(exe).args(args).spawn()?;
+        self.child_proc = Some(proc);
+        Ok(())
     }
 
     async fn kill(&mut self) -> anyhow::Result<()> {
@@ -119,7 +123,7 @@ impl K8sXlineHandle {
 #[async_trait]
 impl XlineHandle for K8sXlineHandle {
     async fn start(&mut self) -> anyhow::Result<()> {
-        let start_cmd: Vec<&str> = self.start_cmd.split(' ').collect();
+        let start_cmd: Vec<&str> = self.start_cmd.split_whitespace().collect();
         let process = self
             .pods_api
             .exec(
