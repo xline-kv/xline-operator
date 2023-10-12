@@ -1,0 +1,4 @@
+resources:
+  - service-account.yaml
+  - namespaced-controller.yml
+  - crd-migration.yml
