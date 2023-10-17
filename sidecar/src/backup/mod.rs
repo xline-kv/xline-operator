@@ -10,7 +10,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use tonic::Streaming;
-use xlineapi::SnapshotResponse;
+use xline_client::types::maintenance::SnapshotResponse;
 
 /// Snapshot file suffix
 const SNAPSHOT_SUFFIX: &str = "xline.backup";

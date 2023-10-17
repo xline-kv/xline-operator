@@ -17,6 +17,7 @@ use tonic_health::pb::health_check_response::ServingStatus;
 use tonic_health::pb::health_client::HealthClient;
 use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
+use xline_client::types::cluster::{MemberAddRequest, MemberListRequest, MemberRemoveRequest};
 use xline_client::types::kv::RangeRequest;
 use xline_client::{Client, ClientOptions};
 
@@ -53,10 +54,12 @@ pub(crate) struct XlineHandle {
     name: String,
     /// The xline backup provider
     backup: Option<Box<dyn Provider>>,
-    /// The xline client
+    /// The xline client, used to connect to the cluster
     client: Option<Client>,
-    /// The xline health client
+    /// The xline health client, used to check self health
     health_client: HealthClient<Channel>,
+    /// The self xline server id
+    server_id: Option<u64>,
     /// The rocks db engine
     engine: Engine,
     /// The xline members
@@ -87,6 +90,7 @@ impl XlineHandle {
             health_client,
             engine,
             client: None,
+            server_id: None,
             xline_members,
             is_healthy_retries: 5,
             inner,
@@ -102,6 +106,8 @@ impl XlineHandle {
 
     /// Start the xline server
     pub(crate) async fn start(&mut self) -> Result<()> {
+        // TODO: hold a distributed lock during start
+
         // Step 1: Check if there is any node running
         // Step 2: If there is no node running, start single node cluster
         // Step 3: If there are some nodes running, start the node as a member to join the cluster
@@ -121,24 +127,55 @@ impl XlineHandle {
         self.inner.start().await?;
 
         let client = Client::connect(self.xline_members.values(), ClientOptions::default()).await?;
-        if cluster_started {
-            let _cluster_client = client.cluster_client();
-            // send membership change here
-        }
-        let _ig = self.client.replace(client);
+        let mut cluster_client = client.cluster_client();
+        let member = if cluster_started {
+            let peer_addr = self
+                .xline_members
+                .get(&self.name)
+                .unwrap_or_else(|| unreachable!("member should contain self"))
+                .clone();
+            let resp = cluster_client
+                .member_add(MemberAddRequest::new(vec![peer_addr], false))
+                .await?;
+            let Some(member) = resp.member else {
+                unreachable!("self member should be set when member add request success")
+            };
+            member
+        } else {
+            let mut members = cluster_client
+                .member_list(MemberListRequest::new(false))
+                .await?
+                .members;
+            if members.len() != 1 {
+                return Err(anyhow!(
+                    "there should be only one member(self) if the cluster if not start"
+                ));
+            }
+            members.remove(0)
+        };
+        debug!("xline server started, member: {:?}", member);
+        _ = self.server_id.replace(member.id);
+        _ = self.client.replace(client);
         Ok(())
     }
 
     /// Stop the xline server
     pub(crate) async fn stop(&mut self) -> Result<()> {
-        // Step 1: Kill the xline node
-        // Step 2: Remove the xline node from the cluster if the cluster exist
-        self.inner.kill().await?;
+        // Step 1: Remove the xline node from the cluster if the cluster exist
+        // Step 2: Kill the xline node
+        let server_id = self
+            .server_id
+            .take()
+            .ok_or_else(|| anyhow!("xline server should not be stopped before started"))?;
 
         if self.is_healthy().await {
-            let _cluster_client = self.client().cluster_client();
-            // send membership change here
+            let mut cluster_client = self.client().cluster_client();
+            _ = cluster_client
+                .member_remove(MemberRemoveRequest::new(server_id))
+                .await?;
         }
+
+        self.inner.kill().await?;
         Ok(())
     }
 

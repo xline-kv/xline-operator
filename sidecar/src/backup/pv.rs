@@ -11,7 +11,7 @@ use tokio::io;
 use tokio::io::AsyncWriteExt;
 use tonic::Streaming;
 use tracing::debug;
-use xlineapi::SnapshotResponse;
+use xline_client::types::maintenance::SnapshotResponse;
 
 use crate::backup::{Metadata, Provider, SNAPSHOT_SUFFIX};
 

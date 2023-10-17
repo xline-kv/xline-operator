@@ -37,6 +37,7 @@ impl LocalXlineHandle {
 #[async_trait]
 impl XlineHandle for LocalXlineHandle {
     async fn start(&mut self) -> anyhow::Result<()> {
+        self.kill().await?;
         let mut cmds = self.start_cmd.split_whitespace();
         let Some((exe, args)) = cmds
             .next()
@@ -123,6 +124,7 @@ impl K8sXlineHandle {
 #[async_trait]
 impl XlineHandle for K8sXlineHandle {
     async fn start(&mut self) -> anyhow::Result<()> {
+        self.kill().await?;
         let start_cmd: Vec<&str> = self.start_cmd.split_whitespace().collect();
         let process = self
             .pods_api
