@@ -3,9 +3,9 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::{Extension, Json};
 use tokio::sync::Mutex;
-use utils::health::{check_backup_volume, check_data_volume};
 
 use crate::types::{MembershipChange, StatePayload};
+use crate::utils::{check_backup_volume, check_data_volume};
 use crate::xline::XlineHandle;
 
 /// Return the current health condition according to the current node's storage volume and network status

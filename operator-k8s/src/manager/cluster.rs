@@ -10,7 +10,7 @@ use k8s_openapi::api::core::v1::{
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, OwnerReference};
 use kube::{Resource, ResourceExt};
-use utils::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
+use operator_api::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
 use crate::consts::{
     ANNOTATION_INHERIT_LABELS_PREFIX, DEFAULT_SIDECAR_PORT, DEFAULT_XLINE_PORT,

@@ -20,6 +20,7 @@ clap = { version = "4.3.4", features = ["derive"] }
 engine = { git = "https://github.com/xline-kv/Xline.git", package = "engine" }
 event-listener = "2.5.3"
 futures = "0.3.28"
+operator-api = { path = "../operator-api" }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.97"
 tera = { version = "1.17.1", default-features = false }
@@ -35,6 +36,6 @@ tonic = "0.9.2"
 tonic-health = "0.9.2"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
-utils = { path = "../utils" }
+uuid = { version = "1.4.1", features = ["v4"] }
 xline-client = { git = "https://github.com/xline-kv/Xline.git", package = "xline-client" }
 xlineapi = { git = "https://github.com/xline-kv/Xline.git", package = "xlineapi" }

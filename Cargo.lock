@@ -636,7 +636,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-opentelemetry",
- "utils 0.1.0 (git+https://github.com/xline-kv/Xline.git)",
+ "utils",
 ]
 
 [[package]]
@@ -3616,14 +3616,6 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 [[package]]
 name = "utils"
 version = "0.1.0"
-dependencies = [
- "anyhow",
- "uuid",
-]
-
-[[package]]
-name = "utils"
-version = "0.1.0"
 source = "git+https://github.com/xline-kv/Xline.git#b9e4660debf4feb06458bd604473a509e299cfd7"
 dependencies = [
  "clippy-utilities 0.2.0",
@@ -3929,7 +3921,7 @@ dependencies = [
  "tracing-appender",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "utils 0.1.0 (git+https://github.com/xline-kv/Xline.git)",
+ "utils",
  "uuid",
  "xlineapi",
 ]
@@ -3951,7 +3943,7 @@ dependencies = [
  "pbkdf2",
  "thiserror",
  "tower",
- "utils 0.1.0 (git+https://github.com/xline-kv/Xline.git)",
+ "utils",
  "xline",
  "xlineapi",
 ]
@@ -3982,7 +3974,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "utils 0.1.0",
 ]
 
 [[package]]
@@ -3997,6 +3988,7 @@ dependencies = [
  "engine",
  "event-listener",
  "futures",
+ "operator-api",
  "serde",
  "serde_json",
  "tera",
@@ -4007,7 +3999,7 @@ dependencies = [
  "tonic-health",
  "tracing",
  "tracing-subscriber",
- "utils 0.1.0",
+ "uuid",
  "xline-client",
  "xlineapi",
 ]

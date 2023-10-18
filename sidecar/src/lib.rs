@@ -158,5 +158,7 @@ pub mod operator;
 mod routers;
 /// Sidecar operator types
 pub mod types;
+/// Some utils
+mod utils;
 /// The xline server handle in sidecar operator
 mod xline;
