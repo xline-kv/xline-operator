@@ -1,3 +1,5 @@
+pub mod consts;
+
 use serde::{Deserialize, Serialize};
 
 /// Heartbeat status

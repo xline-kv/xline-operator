@@ -17,12 +17,12 @@ use operator_api::HeartbeatStatus;
 use prometheus::Registry;
 use tokio::signal;
 use tracing::{debug, info, warn};
-use utils::migration::ApiVersion;
 
 use crate::config::{Config, Namespace};
 use crate::consts::FIELD_MANAGER;
 use crate::controller::cluster::{ClusterController, ClusterMetrics};
 use crate::controller::{Controller, Metrics};
+use crate::crd::version::ApiVersion;
 use crate::crd::Cluster;
 use crate::router::{healthz, metrics, sidecar_state};
 use crate::sidecar_state::SidecarState;

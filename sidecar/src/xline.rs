@@ -8,14 +8,37 @@ use crate::backup::Provider;
 use anyhow::{anyhow, Result};
 use bytes::Buf;
 use engine::{Engine, EngineType, StorageEngine};
+use operator_api::consts::DEFAULT_DATA_DIR;
 use tonic::transport::{Channel, Endpoint};
 use tonic_health::pb::health_check_response::ServingStatus;
 use tonic_health::pb::health_client::HealthClient;
 use tonic_health::pb::HealthCheckRequest;
 use tracing::debug;
-use utils::consts::{DEFAULT_DATA_DIR, KV_TABLE, XLINE_TABLES};
 use xline_client::types::kv::RangeRequest;
 use xline_client::Client;
+
+/// Meta table name
+pub(crate) const META_TABLE: &str = "meta";
+/// KV table name
+pub(crate) const KV_TABLE: &str = "kv";
+/// Lease table name
+pub(crate) const LEASE_TABLE: &str = "lease";
+/// User table
+pub(crate) const USER_TABLE: &str = "user";
+/// Role table
+pub(crate) const ROLE_TABLE: &str = "role";
+/// Auth table
+pub(crate) const AUTH_TABLE: &str = "auth";
+
+/// They are copied from xline because the sidecar operator want to handle the storage engine directly
+pub(crate) const XLINE_TABLES: [&str; 6] = [
+    META_TABLE,
+    KV_TABLE,
+    LEASE_TABLE,
+    AUTH_TABLE,
+    USER_TABLE,
+    ROLE_TABLE,
+];
 
 /// The xline server handle
 #[derive(Debug)]
