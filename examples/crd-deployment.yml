@@ -16,5 +16,5 @@ spec:
     spec:
       containers:
         - name: xline-operator
-          image: datenlord/xline-operator:latest
+          image: ghcr.io/xline-kv/xline-operator:latest
           imagePullPolicy: Never # remove this line to get the latest xline-operator.

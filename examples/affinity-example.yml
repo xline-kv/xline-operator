@@ -15,7 +15,7 @@ spec:
                   - affinity-xline-cluster # This label is internally set and could be used to select pods.
           topologyKey: "kubernetes.io/hostname"
   container:
-    image: "datenlord/xline"
+    image: "xline-kv/xline"
     name: "my-xline"
     ports:
       - containerPort: 2379
