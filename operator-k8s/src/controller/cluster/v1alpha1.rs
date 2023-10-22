@@ -33,7 +33,7 @@ impl MetricsLabeled for kube::Error {
             Self::Service(_) => vec!["service error"],
             Self::FromUtf8(_) | Self::SerdeError(_) => vec!["encode/decode error"],
             Self::Auth(_) => vec!["authorization error"],
-            Self::OpensslTls(_) => vec!["tls error"],
+            Self::RustlsTls(_) => vec!["tls error"],
             Self::HyperError(_) | Self::HttpError(_) => vec!["http error"],
             _ => vec!["unknown"],
         }

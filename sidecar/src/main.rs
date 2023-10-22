@@ -283,7 +283,7 @@ fn parse_backend(value: &str) -> Result<Backend, String> {
                     "pod" => pod_name = v.to_owned(),
                     "container" => container_name = v.to_owned(),
                     "namespace" => namespace = v.to_owned(),
-                    _ => return Err(format!("k8s backend got unexpect argument {item}, expect one of 'pod', 'container', 'namespace'")),
+                    _ => return Err(format!("k8s backend got unexpected argument {item}, expect one of 'pod', 'container', 'namespace'")),
                 }
             }
             if pod_name.is_empty() || container_name.is_empty() || namespace.is_empty() {
