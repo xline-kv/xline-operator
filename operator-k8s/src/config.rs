@@ -20,10 +20,10 @@ pub struct Config {
     /// The kubernetes cluster DNS suffix
     #[arg(long, default_value = "cluster.local")]
     pub cluster_suffix: String,
-    /// maximum interval between accepted `HeartbeatStatus`
+    /// Maximum interval between accepted `HeartbeatStatus`
     #[arg(long, default_value = "2")]
     pub heartbeat_period: u64,
-    /// unreachable counter threshold
+    /// Sidecar unreachable counter threshold
     #[arg(long, default_value = "4")]
     pub unreachable_thresh: usize,
 }
