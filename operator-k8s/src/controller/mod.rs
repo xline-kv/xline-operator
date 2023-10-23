@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt::Debug;
+use std::future::Future;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -79,6 +80,20 @@ where
     async fn run(controller: Arc<Self>, api: Api<R>) {
         kube::runtime::Controller::new(api, WatcherConfig::default())
             .shutdown_on_signal()
+            .run(Self::reconcile, Self::on_error, controller)
+            .filter_map(|res| async move { res.ok() })
+            .for_each(|_| futures::future::ready(()))
+            .await;
+    }
+
+    /// Run this controller with a shutdown signal
+    async fn run_with_shutdown(
+        controller: Arc<Self>,
+        api: Api<R>,
+        trigger: impl Future<Output = ()> + Send + Sync + 'static,
+    ) {
+        kube::runtime::Controller::new(api, WatcherConfig::default())
+            .graceful_shutdown_on(trigger)
             .run(Self::reconcile, Self::on_error, controller)
             .filter_map(|res| async move { res.ok() })
             .for_each(|_| futures::future::ready(()))

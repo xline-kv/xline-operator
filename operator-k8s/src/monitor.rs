@@ -12,8 +12,8 @@ use tracing::{debug, error};
 
 use crate::crd::Cluster;
 
-/// State of sidecar operators
-pub(crate) struct SidecarState {
+/// Sidecar monitor
+pub(crate) struct SidecarMonitor {
     /// Map for each sidecar operator and its status
     statuses: HashMap<String, HeartbeatStatus>,
     /// Receiver for heartbeat status
@@ -30,7 +30,7 @@ pub(crate) struct SidecarState {
     unreachable_thresh: usize,
 }
 
-impl SidecarState {
+impl SidecarMonitor {
     /// Creates a new `SidecarState`
     pub(crate) fn new(
         status_rx: Receiver<HeartbeatStatus>,
@@ -67,14 +67,20 @@ impl SidecarState {
         }
     }
 
-    /// Inner task for state update
+    /// Inner task for state update, return the unrecoverable error
     async fn state_update_inner(mut self) -> Result<()> {
         loop {
             let status = self.status_rx.recv_async().await?;
             debug!("received status: {status:?}");
             let _prev = self.statuses.insert(status.name.clone(), status);
 
-            let spec_size = self.get_spec_size().await?;
+            let spec_size = match self.get_spec_size().await {
+                Ok(spec_size) => spec_size,
+                Err(err) => {
+                    error!("get cluster size failed, error: {err}");
+                    continue;
+                }
+            };
             let majority = (spec_size / 2).overflow_add(1);
             debug!("spec.size: {spec_size}, majority: {majority}");
 
@@ -182,7 +188,7 @@ mod test {
         ];
 
         assert!(
-            SidecarState::get_reachable_counts(&statuses1.into(), heartbeat_period, majority)
+            SidecarMonitor::get_reachable_counts(&statuses1.into(), heartbeat_period, majority)
                 .is_none(),
             "the reachable status should not be accepted"
         );
@@ -203,7 +209,7 @@ mod test {
         ];
 
         let counts =
-            SidecarState::get_reachable_counts(&statuses0.into(), heartbeat_period, majority)
+            SidecarMonitor::get_reachable_counts(&statuses0.into(), heartbeat_period, majority)
                 .expect("the status not accepted");
 
         assert_eq!(counts[&id0], 1);

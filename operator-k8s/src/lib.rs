@@ -159,9 +159,9 @@ mod controller;
 mod crd;
 /// Custom resource manager
 mod manager;
+/// Sidecar monitor
+mod monitor;
 /// Xline operator
 pub mod operator;
 /// Xline operator web server router
 mod router;
-/// Maintain the state of sidecar operators
-mod sidecar_state;
