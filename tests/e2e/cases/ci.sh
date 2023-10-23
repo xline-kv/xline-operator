@@ -12,9 +12,9 @@ _TEST_CI_LOG_SYNC_TIMEOUT=30
 _TEST_CI_START_SIZE=3
 
 function test::ci::_mk_endpoints() {
-  local endpoints="${_TEST_CI_CLUSTER_NAME}-nodes-0.${_TEST_CI_CLUSTER_NAME}-srv.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+  local endpoints="${_TEST_CI_CLUSTER_NAME}-nodes-0.${_TEST_CI_CLUSTER_NAME}-svc.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   for ((i = 1; i < $1; i++)); do
-    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-nodes-${i}.${_TEST_CI_CLUSTER_NAME}-srv.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-nodes-${i}.${_TEST_CI_CLUSTER_NAME}-svc.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   done
   echo "$endpoints"
 }

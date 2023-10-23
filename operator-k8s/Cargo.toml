@@ -17,7 +17,6 @@ async-trait = "0.1.68"
 axum = "0.6.18"
 clap = { version = "4.3.4", features = ["derive"] }
 clippy-utilities = "0.2.0"
-event-listener = "2.5.3"
 flume = "0.10.14"
 futures = "0.3.28"
 k8s-openapi = { version = "0.18.0", features = ["v1_26", "schemars"] }

@@ -3957,7 +3957,6 @@ dependencies = [
  "axum",
  "clap 4.4.6",
  "clippy-utilities 0.2.0",
- "event-listener",
  "flume",
  "futures",
  "garde",

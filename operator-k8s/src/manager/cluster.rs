@@ -41,8 +41,8 @@ impl Component {
     fn label(&self) -> &str {
         match *self {
             Component::Nodes => "nodes",
-            Component::Service => "srv",
-            Component::BackupJob => "job",
+            Component::Service => "svc",
+            Component::BackupJob => "backup",
         }
     }
 }
@@ -307,12 +307,12 @@ impl Factory {
         let extractor = Extractor::new(self.cluster.as_ref());
         let (name, namespace) = extractor.extract_id();
         let (xline_port, _, _) = extractor.extract_ports();
-        let srv_name = Self::component_name(name, Component::Service);
+        let svc_name = Self::component_name(name, Component::Service);
         let mut members = vec![];
         for i in 0..=size {
             let node_name = format!("{}-{i}", Self::component_name(name, Component::Nodes));
             members.push(format!(
-                "{node_name}={node_name}.{srv_name}.{namespace}.svc.{}:{}",
+                "{node_name}={node_name}.{svc_name}.{namespace}.svc.{}:{}",
                 self.cluster_suffix, xline_port.container_port
             ));
         }
@@ -622,11 +622,11 @@ spec:
         );
         assert_eq!(
             Factory::component_name("my-xline-cluster", Component::Service),
-            "my-xline-cluster-srv"
+            "my-xline-cluster-svc"
         );
         assert_eq!(
             Factory::component_name("my-xline-cluster", Component::BackupJob),
-            "my-xline-cluster-job"
+            "my-xline-cluster-backup"
         );
     }
 
