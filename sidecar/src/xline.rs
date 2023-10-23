@@ -111,16 +111,17 @@ impl XlineHandle {
         // Step 1: Check if there is any node running
         // Step 2: If there is no node running, start single node cluster
         // Step 3: If there are some nodes running, start the node as a member to join the cluster
-        let endpoints = self
+        let others = self
             .xline_members
-            .values()
-            .map(|addr| {
+            .iter()
+            .filter(|&(name, _)| name != &self.name)
+            .map(|(_, addr)| {
                 Ok::<_, tonic::transport::Error>(
                     Endpoint::from_shared(addr.clone())?.connect_timeout(Duration::from_secs(3)),
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let futs: FuturesUnordered<_> = endpoints.iter().map(Endpoint::connect).collect();
+        let futs: FuturesUnordered<_> = others.iter().map(Endpoint::connect).collect();
         // the cluster is started if any of the connection is successful
         let cluster_started = futs.any(|res| async move { res.is_ok() }).await;
 
