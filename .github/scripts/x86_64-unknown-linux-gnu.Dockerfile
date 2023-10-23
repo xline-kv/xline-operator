@@ -4,3 +4,5 @@ RUN set-eux; apt-get update && \
     apt-get install --assume-yes clang libclang-dev unzip wget libssl-dev && \
     wget https://github.com/protocolbuffers/protobuf/releases/download/v21.10/protoc-21.10-linux-x86_64.zip && \
     unzip protoc-21.10-linux-x86_64.zip -d /usr/local \
+    wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_amd64.deb && \
+    dpkg -i libssl1.1_1.1.0g-2ubuntu4_amd64.deb
