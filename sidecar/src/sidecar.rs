@@ -5,10 +5,11 @@ use anyhow::{anyhow, Result};
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use futures::{FutureExt, TryFutureExt};
-use operator_api::{K8sXlineHandle, LocalXlineHandle};
+use operator_api::consts::{SIDECAR_BACKUP_ROUTE, SIDECAR_HEALTH_ROUTE, SIDECAR_STATE_ROUTE};
+use operator_api::{HeartbeatStatus, K8sXlineHandle, LocalXlineHandle};
 use tokio::sync::watch::{Receiver, Sender};
 use tokio::sync::Mutex;
-use tokio::time::interval;
+use tokio::time::{interval, MissedTickBehavior};
 use tracing::{debug, error, info, warn};
 
 use crate::backup::pv::Pv;
@@ -16,17 +17,17 @@ use crate::backup::Provider;
 use crate::controller::Controller;
 use crate::controller::Error;
 use crate::routers;
-use crate::types::{Backend, Backup, Config, State, StatePayload};
+use crate::types::{BackendConfig, BackupConfig, Config, State, StatePayload};
 use crate::xline::XlineHandle;
 
-/// Sidecar operator
+/// Sidecar
 #[derive(Debug)]
-pub struct Operator {
+pub struct Sidecar {
     /// Operator config
     config: Config,
 }
 
-impl Operator {
+impl Sidecar {
     /// Constructor
     #[must_use]
     #[inline]
@@ -59,6 +60,7 @@ impl Operator {
             Arc::clone(&state),
             graceful_shutdown_event.subscribe(),
         )?;
+        self.start_heartbeat(graceful_shutdown_event.subscribe());
 
         tokio::pin!(forceful_shutdown);
 
@@ -83,8 +85,8 @@ impl Operator {
             .backup
             .as_ref()
             .and_then(|backup| match *backup {
-                Backup::S3 { .. } => None, // TODO S3 backup
-                Backup::PV { ref path } => {
+                BackupConfig::S3 { .. } => None, // TODO S3 backup
+                BackupConfig::PV { ref path } => {
                     let pv: Box<dyn Provider> = Box::new(Pv {
                         backup_path: path.clone(),
                     });
@@ -92,7 +94,7 @@ impl Operator {
                 }
             });
         let inner: Box<dyn operator_api::XlineHandle> = match self.config.backend.clone() {
-            Backend::K8s {
+            BackendConfig::K8s {
                 pod_name,
                 container_name,
                 namespace,
@@ -101,13 +103,13 @@ impl Operator {
                     pod_name,
                     container_name,
                     &namespace,
-                    self.config.start_cmd.clone(),
+                    self.config.xline.clone(),
                 )
                 .await;
                 Box::new(handle)
             }
-            Backend::Local => {
-                let handle = LocalXlineHandle::new(self.config.start_cmd.clone());
+            BackendConfig::Local => {
+                let handle = LocalXlineHandle::new(self.config.xline.clone());
                 Box::new(handle)
             }
         };
@@ -116,7 +118,7 @@ impl Operator {
             backup,
             inner,
             self.config.xline_port,
-            self.config.xline_members(),
+            self.config.init_xline_members(),
         )
     }
 
@@ -129,6 +131,45 @@ impl Operator {
         let _ctrl_c_c = tokio::signal::ctrl_c().await;
     }
 
+    /// Start heartbeat
+    fn start_heartbeat(&self, graceful_shutdown: Receiver<()>) {
+        let Some(monitor) = self.config.monitor.clone() else {
+            return;
+        };
+        let cluster_name = self.config.cluster_name.clone();
+        let name = self.config.name.clone();
+        let init_members = self.config.init_sidecar_members();
+
+        #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
+        let _ig = tokio::spawn(async move {
+            let mut shutdown = graceful_shutdown;
+
+            let heartbeat_task = async move {
+                let mut tick = interval(monitor.heartbeat_interval);
+                // ensure a fixed heartbeat interval
+                tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                loop {
+                    let instant = tick.tick().await;
+                    debug!("send heartbeat at {instant:?}");
+                    let status =
+                        HeartbeatStatus::gather(cluster_name.clone(), name.clone(), &init_members)
+                            .await;
+                    debug!("sidecar gathered status: {status:?}");
+                    if let Err(e) = status.report(&monitor.monitor_addr).await {
+                        error!("heartbeat report failed, error {e}");
+                    }
+                }
+            };
+
+            tokio::select! {
+                _ = shutdown.changed() => {
+                    info!("heartbeat task graceful shutdown");
+                },
+                _ = heartbeat_task => {}
+            }
+        });
+    }
+
     /// Start controller
     fn start_controller(
         &self,
@@ -138,7 +179,7 @@ impl Operator {
     ) {
         let mut controller = Controller::new(
             handle,
-            interval(self.config.check_interval),
+            interval(self.config.reconcile_interval),
             state,
             graceful_shutdown,
         );
@@ -170,7 +211,7 @@ impl Operator {
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
-        let members = self.config.operator_members();
+        let members = self.config.init_sidecar_members();
         let advertise_url = members.get(&self.config.name).ok_or(anyhow!(
             "node name {} not found in members",
             self.config.name
@@ -180,9 +221,9 @@ impl Operator {
         ))?;
 
         let app = Router::new()
-            .route("/health", get(routers::health))
-            .route("/backup", get(routers::backup))
-            .route("/state", get(routers::state))
+            .route(SIDECAR_HEALTH_ROUTE, get(routers::health))
+            .route(SIDECAR_BACKUP_ROUTE, get(routers::backup))
+            .route(SIDECAR_STATE_ROUTE, get(routers::state))
             .route("/membership", post(routers::membership))
             .layer(Extension(handle))
             .layer(Extension(state));

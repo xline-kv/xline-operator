@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use operator_api::XlineConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -7,30 +8,45 @@ use std::time::Duration;
 
 /// Sidecar operator config
 #[derive(Debug, Clone)]
-#[allow(clippy::exhaustive_structs)] // it is exhaustive
+#[allow(clippy::exhaustive_structs)] // It is only constructed once
 pub struct Config {
     /// Name of this node
     pub name: String,
+    /// The cluster name
+    pub cluster_name: String,
+    /// Sidecar initial hosts, [pod_name]->[pod_host]
+    pub init_members: HashMap<String, String>,
     /// The xline server port
     pub xline_port: u16,
-    /// The operator web server port
-    pub operator_port: u16,
-    /// Check cluster health interval
-    pub check_interval: Duration,
+    /// The sidecar web server port
+    pub sidecar_port: u16,
+    /// Reconcile cluster interval
+    pub reconcile_interval: Duration,
+    /// The xline config
+    pub xline: XlineConfig,
+    /// The backend to run xline
+    pub backend: BackendConfig,
+    /// The sidecar monitor (operator) config, set to enable
+    /// heartbeat and configuration discovery
+    pub monitor: Option<MonitorConfig>,
     /// Backup storage config
-    pub backup: Option<Backup>,
-    /// Operators hosts, [pod_name]->[pod_host]
-    pub members: HashMap<String, String>,
-    /// The xline start cmd
-    pub start_cmd: String,
-    /// The backend
-    pub backend: Backend,
+    pub backup: Option<BackupConfig>,
+}
+
+/// Monitor(Operator) config
+#[derive(Debug, Clone)]
+#[allow(clippy::exhaustive_structs)] // It is only constructed once
+pub struct MonitorConfig {
+    /// Monitor address
+    pub monitor_addr: String,
+    /// heartbeat interval
+    pub heartbeat_interval: Duration,
 }
 
 /// Sidecar backend, it determinate how xline could be setup
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Backend {
+pub enum BackendConfig {
     /// K8s backend
     K8s {
         /// The pod name of this node
@@ -47,7 +63,7 @@ pub enum Backend {
 /// Backup storage config
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Backup {
+pub enum BackupConfig {
     /// S3 storage
     S3 {
         /// S3 bucket name
@@ -61,22 +77,22 @@ pub enum Backup {
 }
 
 impl Config {
-    /// Get the operator members
+    /// Get the initial sidecar members
     #[must_use]
     #[inline]
-    pub fn operator_members(&self) -> HashMap<String, String> {
-        self.members
+    pub fn init_sidecar_members(&self) -> HashMap<String, String> {
+        self.init_members
             .clone()
             .into_iter()
-            .map(|(name, host)| (name, format!("{host}:{}", self.operator_port)))
+            .map(|(name, host)| (name, format!("{host}:{}", self.sidecar_port)))
             .collect()
     }
 
-    /// Get the xline members
+    /// Get the initial xline members
     #[must_use]
     #[inline]
-    pub fn xline_members(&self) -> HashMap<String, String> {
-        self.members
+    pub fn init_xline_members(&self) -> HashMap<String, String> {
+        self.init_members
             .clone()
             .into_iter()
             .map(|(name, host)| (name, format!("{host}:{}", self.xline_port)))

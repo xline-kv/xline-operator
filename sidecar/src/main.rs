@@ -86,7 +86,7 @@
     clippy::rc_mutex,
     clippy::rest_pat_in_fully_bound_structs,
     clippy::same_name_method,
-    clippy::self_named_module_files,
+    // clippy::self_named_module_files, false positive
     // clippy::shadow_reuse, it’s a common pattern in Rust code
     // clippy::shadow_same, it’s a common pattern in Rust code
     clippy::shadow_unrelated,
@@ -135,15 +135,23 @@
     clippy::multiple_crate_versions, // caused by the dependency, can't be fixed
 )]
 
+use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
+use operator_api::consts::DEFAULT_DATA_DIR;
+use operator_api::XlineConfig;
 use tracing::debug;
+use xline_sidecar::sidecar::Sidecar;
+use xline_sidecar::types::{BackendConfig, BackupConfig, Config, MonitorConfig};
 
-use xline_sidecar::operator::Operator;
-use xline_sidecar::types::{Backend, Backup, Config};
+/// `DEFAULT_DATA_DIR` to String
+fn default_data_dir() -> String {
+    DEFAULT_DATA_DIR.to_owned()
+}
 
 /// Command line interface
 #[derive(Parser, Debug)]
@@ -152,85 +160,86 @@ struct Cli {
     /// The name of this sidecar, and is shared with xline node name
     #[arg(long)]
     name: String,
-    /// The host ip of each member, [node_name] -> [node_host]
+    /// The cluster name of this sidecar
+    #[arg(long)]
+    cluster_name: String,
+    /// The host of each member at initial, [node_name] -> [node_host]
+    /// Need to include at least the pair of this node
     #[arg(long, value_parser = parse_members)]
-    members: HashMap<String, String>,
+    init_members: HashMap<String, String>,
     /// The xline server port
     #[arg(long)]
     xline_port: u16,
-    /// Operator web server port
+    /// Sidecar web server port
     #[arg(long)]
-    operator_port: u16,
-    /// Check health interval, default 20 [unit: seconds]
+    sidecar_port: u16,
+    /// Reconcile cluster interval, default 20 [unit: seconds]
     #[arg(long, default_value = "20")]
-    check_interval: u64,
-    /// Enable backup, choose a storage type, e.g. s3:bucket_name or pv:/path/to/dir
-    #[arg(long, value_parser=parse_backup_type)]
-    backup: Option<Backup>,
-    /// The xline executable path, default "xline"
-    #[arg(long, default_value = "xline")]
-    xline_executable: String,
-    /// Storage engine used in xline
-    #[arg(long)]
-    storage_engine: String,
-    /// The directory path contains xline server data if the storage_engine is rocksdb
-    #[arg(long)]
-    data_dir: PathBuf,
-    /// Whether this node is leader or not
-    #[arg(long, default_value = "false")]
-    is_leader: bool,
-    /// Additional arguments, it will be appended behind the required parameters,
-    /// e.g "--jaeger_offline true"
-    #[arg(long)]
-    additional: Option<String>,
+    reconcile_interval: u64,
     /// The sidecar backend, when you use different operators, the backend may different.
     /// e.g:
     ///   "k8s,pod=xline-pod-1,container=xline,namespace=default" for k8s backend
     ///   "local" for local backend
-    #[arg(long, value_parser=parse_backend)]
-    backend: Backend,
+    #[arg(long, value_parser = parse_backend)]
+    backend: BackendConfig,
+    /// The xline executable path, default to "xline"
+    #[arg(long, default_value = "xline")]
+    xline_executable: String,
+    /// The xline storage engine, default to "rocksdb"
+    #[arg(long, default_value = "rocksdb")]
+    xline_storage_engine: String,
+    /// The xline data directory, default to "/usr/local/xline/data-dir"
+    #[arg(long, default_value_t = default_data_dir())]
+    xline_data_dir: String,
+    /// Set if this xline node is a leader node, default to false
+    #[arg(long, default_value = "false")]
+    xline_is_leader: bool,
+    /// The xline additional parameter
+    #[arg(long)]
+    xline_additional: Option<String>,
+    /// Enable backup, choose a storage type.
+    /// e.g:
+    ///    s3:bucket_name    for s3 (not available)
+    ///    pv:/path/to/dir   for pv
+    #[arg(long, value_parser = parse_backup_type)]
+    backup: Option<BackupConfig>,
+    /// Monitor(Operator) address, set to enable heartbeat and configuration discovery
+    #[arg(long, alias = "operator-addr")]
+    monitor_addr: Option<String>,
+    /// Heartbeat interval, it is enabled if --monitor_addr is set.
+    #[arg(long, alias = "operator_heartbeat_interval", default_value = "10")]
+    heartbeat_interval: u64,
 }
 
 impl From<Cli> for Config {
     fn from(value: Cli) -> Self {
-        let mut config = Self {
-            start_cmd: String::new(),
+        Self {
             name: value.name.clone(),
+            cluster_name: value.cluster_name,
+            init_members: value.init_members,
             xline_port: value.xline_port,
-            operator_port: value.operator_port,
-            check_interval: std::time::Duration::from_secs(value.check_interval),
-            backup: value.backup,
-            members: value.members,
+            sidecar_port: value.sidecar_port,
+            reconcile_interval: Duration::from_secs(value.reconcile_interval),
             backend: value.backend,
-        };
-        config.start_cmd = format!(
-            "{} --name {} --members {} --storage-engine {} --data-dir {}",
-            value.xline_executable,
-            value.name,
-            config
-                .xline_members()
-                .into_iter()
-                .map(|(name, addr)| format!("{name}={addr}"))
-                .collect::<Vec<_>>()
-                .join(","),
-            value.storage_engine,
-            value.data_dir.to_string_lossy(),
-        );
-        if value.is_leader {
-            config.start_cmd.push(' ');
-            config.start_cmd.push_str("--is-leader");
+            xline: XlineConfig {
+                name: value.name, // xline server has a same name with sidecar
+                executable: value.xline_executable,
+                storage_engine: value.xline_storage_engine,
+                data_dir: value.xline_data_dir,
+                is_leader: value.xline_is_leader,
+                additional: value.xline_additional,
+            },
+            backup: value.backup,
+            monitor: value.monitor_addr.map(|addr| MonitorConfig {
+                monitor_addr: addr,
+                heartbeat_interval: Duration::from_secs(value.heartbeat_interval),
+            }),
         }
-        if let Some(additional) = value.additional {
-            config.start_cmd.push(' ');
-            let pat: &[_] = &['\'', '"'];
-            config.start_cmd.push_str(additional.trim_matches(pat));
-        }
-        config
     }
 }
 
 /// parse backup type
-fn parse_backup_type(value: &str) -> Result<Backup, String> {
+fn parse_backup_type(value: &str) -> Result<BackupConfig, String> {
     if value.is_empty() {
         return Err("backup type is empty".to_owned());
     }
@@ -245,7 +254,7 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
                 ));
             }
             let bucket = items.remove(0).to_owned();
-            Ok(Backup::S3 { bucket })
+            Ok(BackupConfig::S3 { bucket })
         }
         "pv" => {
             if items.len() != 1 {
@@ -255,7 +264,7 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
                 ));
             }
             let path = items.remove(0).to_owned();
-            Ok(Backup::PV {
+            Ok(BackupConfig::PV {
                 path: PathBuf::from(path),
             })
         }
@@ -264,7 +273,7 @@ fn parse_backup_type(value: &str) -> Result<Backup, String> {
 }
 
 /// Parse backend
-fn parse_backend(value: &str) -> Result<Backend, String> {
+fn parse_backend(value: &str) -> Result<BackendConfig, String> {
     if value.is_empty() {
         return Err("backend is empty".to_owned());
     }
@@ -289,13 +298,13 @@ fn parse_backend(value: &str) -> Result<Backend, String> {
             if pod_name.is_empty() || container_name.is_empty() || namespace.is_empty() {
                 return Err("k8s backend must set 'pod', 'container', 'namespace'".to_owned());
             }
-            Ok(Backend::K8s {
+            Ok(BackendConfig::K8s {
                 pod_name,
                 container_name,
                 namespace,
             })
         }
-        "local" => Ok(Backend::Local),
+        "local" => Ok(BackendConfig::Local),
         _ => Err(format!("unknown backend: {backend}")),
     }
 }
@@ -303,8 +312,7 @@ fn parse_backend(value: &str) -> Result<Backend, String> {
 /// parse members from string
 /// # Errors
 /// Return error when pass wrong args
-#[inline]
-pub fn parse_members(s: &str) -> Result<HashMap<String, String>, String> {
+fn parse_members(s: &str) -> Result<HashMap<String, String>, String> {
     let mut map = HashMap::new();
     for pair in s.split(',') {
         if let Some((id, addr)) = pair.split_once('=') {
@@ -325,7 +333,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     debug!("{:?}", cli);
 
-    Operator::new(cli.into()).run().await
+    Sidecar::new(cli.into()).run().await
 }
 
 #[cfg(test)]
@@ -334,23 +342,33 @@ mod test {
     use clap::Parser;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use xline_sidecar::types::{Backend, Backup, Config};
+    use xline_sidecar::types::{BackendConfig, BackupConfig};
 
     fn full_parameter() -> Vec<&'static str> {
         vec![
             "sidecar_exe",
             "--name=node1",
-            "--members=node1=127.0.0.1",
+            "--cluster-name=my-xline-cluster",
+
+            "--init-members=node1=127.0.0.1,node2=127.0.0.2,node3=127.0.0.3",
+
             "--xline-port=2379",
-            "--operator-port=2380",
-            "--check-interval=60",
-            "--backup=s3:bucket_name",
-            "--xline-executable=/usr/local/bin/xline",
-            "--storage-engine=rocksdb",
-            "--data-dir=/usr/local/xline/data-dir",
-            "--is-leader",
-            "--additional='--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'",
+            "--sidecar-port=2380",
+
+            "--reconcile-interval=20",
             "--backend=k8s,pod=xline-pod-1,container=xline,namespace=default",
+
+            "--xline-executable=/usr/local/bin/xline",
+            "--xline-storage-engine=rocksdb",
+            "--xline-data-dir=/usr/local/xline/data-dir",
+            "--xline-is-leader",
+            "--xline-additional='--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'",
+
+            "--backup=s3:bucket_name",
+
+            "--operator-addr=xline-operator.svc.default.cluster.local:8080",
+
+            "--heartbeat-interval=10",
         ]
     }
 
@@ -360,7 +378,7 @@ mod test {
             ("", Err("backup type is empty".to_owned())),
             (
                 "s3:bucket_name",
-                Ok(Backup::S3 {
+                Ok(BackupConfig::S3 {
                     bucket: "bucket_name".to_owned(),
                 }),
             ),
@@ -374,7 +392,7 @@ mod test {
             ),
             (
                 "pv:/home",
-                Ok(Backup::PV {
+                Ok(BackupConfig::PV {
                     path: PathBuf::from("/home"),
                 }),
             ),
@@ -401,13 +419,13 @@ mod test {
         let test_cases = [
             (
                 "k8s,pod=my-pod,container=my-container,namespace=my-namespace",
-                Ok(Backend::K8s {
+                Ok(BackendConfig::K8s {
                     pod_name: "my-pod".to_owned(),
                     container_name: "my-container".to_owned(),
                     namespace: "my-namespace".to_owned(),
                 }),
             ),
-            ("local", Ok(Backend::Local)),
+            ("local", Ok(BackendConfig::Local)),
             ("", Err("backend is empty".to_owned())),
             (
                 "k8s,pod=my-pod,invalid-arg,namespace=my-namespace",
@@ -472,24 +490,33 @@ mod test {
         let cli = Cli::parse_from(full_parameter());
         assert_eq!(cli.name, "node1");
         assert_eq!(
-            cli.members,
-            HashMap::from([("node1".to_owned(), "127.0.0.1".to_owned())])
+            cli.init_members,
+            HashMap::from([
+                ("node1".to_owned(), "127.0.0.1".to_owned()),
+                ("node2".to_owned(), "127.0.0.2".to_owned()),
+                ("node3".to_owned(), "127.0.0.3".to_owned()),
+            ])
         );
         assert_eq!(cli.xline_port, 2379);
-        assert_eq!(cli.operator_port, 2380);
-        assert_eq!(cli.check_interval, 60);
+        assert_eq!(cli.sidecar_port, 2380);
+        assert_eq!(
+            cli.monitor_addr.unwrap_or_default(),
+            "xline-operator.svc.default.cluster.local:8080"
+        );
+        assert_eq!(cli.reconcile_interval, 20);
+        assert_eq!(cli.heartbeat_interval, 10);
         assert_eq!(
             cli.backup,
-            Some(Backup::S3 {
+            Some(BackupConfig::S3 {
                 bucket: "bucket_name".to_owned(),
             })
         );
         assert_eq!(cli.xline_executable, "/usr/local/bin/xline");
-        assert_eq!(cli.storage_engine, "rocksdb");
-        assert_eq!(cli.data_dir.to_string_lossy(), "/usr/local/xline/data-dir");
-        assert!(cli.is_leader);
+        assert_eq!(cli.xline_storage_engine, "rocksdb");
+        assert_eq!(cli.xline_data_dir, "/usr/local/xline/data-dir");
+        assert!(cli.xline_is_leader);
         assert_eq!(
-            cli.additional,
+            cli.xline_additional,
             Some(
                 "'--auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem'"
                     .to_owned()
@@ -497,17 +524,11 @@ mod test {
         );
         assert_eq!(
             cli.backend,
-            Backend::K8s {
+            BackendConfig::K8s {
                 pod_name: "xline-pod-1".to_owned(),
                 container_name: "xline".to_owned(),
                 namespace: "default".to_owned(),
             }
         );
-    }
-
-    #[test]
-    fn test_gen_start_cmd() {
-        let config: Config = Cli::parse_from(full_parameter()).into();
-        assert_eq!(config.start_cmd, "/usr/local/bin/xline --name node1 --members node1=127.0.0.1:2379 --storage-engine rocksdb --data-dir /usr/local/xline/data-dir --is-leader --auth-public-key /mnt/public.pem --auth-private-key /mnt/private.pem");
     }
 }

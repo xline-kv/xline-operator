@@ -125,7 +125,7 @@ impl XlineHandle {
         // the cluster is started if any of the connection is successful
         let cluster_started = futs.any(|res| async move { res.is_ok() }).await;
 
-        self.inner.start().await?;
+        self.inner.start(&self.xline_members).await?;
 
         let client = Client::connect(self.xline_members.values(), ClientOptions::default()).await?;
         let mut cluster_client = client.cluster_client();

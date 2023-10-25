@@ -87,7 +87,7 @@
     clippy::rc_mutex,
     clippy::rest_pat_in_fully_bound_structs,
     clippy::same_name_method,
-    clippy::self_named_module_files,
+    // clippy::self_named_module_files, false positive
     // clippy::shadow_reuse, it’s a common pattern in Rust code
     // clippy::shadow_same, it’s a common pattern in Rust code
     clippy::shadow_unrelated,
@@ -152,10 +152,10 @@
 mod backup;
 /// Sidecar operator controller
 mod controller;
-/// Sidecar operator
-pub mod operator;
 /// The web server routers
 mod routers;
+/// Sidecar operator
+pub mod sidecar;
 /// Sidecar operator types
 pub mod types;
 /// Some utils
