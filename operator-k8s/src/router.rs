@@ -30,9 +30,9 @@ pub(crate) async fn healthz() -> &'static str {
     "healthy"
 }
 
-/// sidecar state handler
+/// sidecar monitor handler
 #[allow(clippy::unused_async)] // require by axum
-pub(crate) async fn sidecar_state(
+pub(crate) async fn sidecar_monitor(
     Extension(status_tx): Extension<Sender<HeartbeatStatus>>,
     Json(status): Json<HeartbeatStatus>,
 ) {

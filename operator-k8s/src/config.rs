@@ -11,10 +11,12 @@ pub struct Config {
     /// The address on which the heartbeat HTTP server will listen to
     #[arg(long, default_value = "0.0.0.0:8080")]
     pub listen_addr: String,
-    /// Whether to create CRD regardless of current version on k8s
+    /// Enable manage-crd to create CRD automatically
+    /// This requires a ClusterRole of CRD manipulate
     #[arg(long, default_value = "false")]
-    pub create_crd: bool,
-    /// Whether to enable auto migration if CRD version is less than current version
+    pub manage_crd: bool,
+    /// Enable auto migration if CRD version is less than current version
+    /// (--manage-crd should be set to true)
     #[arg(long, default_value = "false")]
     pub auto_migration: bool,
     /// The kubernetes cluster DNS suffix
