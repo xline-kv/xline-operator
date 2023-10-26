@@ -2,7 +2,9 @@
 
 use operator_api::XlineConfig;
 use serde::{Deserialize, Serialize};
+
 use std::collections::HashMap;
+use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -101,7 +103,7 @@ impl Config {
 }
 
 /// Sidecar operator state
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Hash)]
 pub(crate) enum State {
     /// When this operator is trying to start it's kvserver
     Start,
@@ -118,6 +120,44 @@ pub(crate) struct StatePayload {
     pub(crate) state: State,
     /// Current revision
     pub(crate) revision: i64,
+}
+
+/// The gathered states from sidecars
+#[derive(Debug, Clone)]
+pub(crate) struct StateStatus {
+    /// A sidecar with highest revision is considered as "seeder".
+    /// There could be more than one "seeder".
+    pub(crate) seeder: String,
+    /// State count, used to determine cluster status
+    pub(crate) states: HashMap<State, usize>,
+}
+
+impl StateStatus {
+    /// Gather status from sidecars
+    pub(crate) async fn gather(sidecars: &HashMap<String, String>) -> anyhow::Result<Self> {
+        use operator_api::consts::SIDECAR_STATE_ROUTE;
+
+        let mut seeder = "";
+        let mut max_rev = i64::MIN;
+        let mut states = HashMap::<State, usize>::new();
+
+        for (name, addr) in sidecars {
+            let url = format!("http://{addr}{SIDECAR_STATE_ROUTE}");
+            let state: StatePayload = reqwest::get(url).await?.json().await?;
+            if state.revision > max_rev {
+                max_rev = state.revision;
+                seeder = name;
+            }
+            let _ig = states
+                .entry(state.state)
+                .and_modify(|cnt| cnt.add_assign(1))
+                .or_default();
+        }
+        Ok(Self {
+            seeder: seeder.to_owned(),
+            states,
+        })
+    }
 }
 
 /// The membership change request sent by other sidecar operators when they are shutting down

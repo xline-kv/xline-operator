@@ -4113,6 +4113,7 @@ dependencies = [
  "engine",
  "futures",
  "operator-api",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",
