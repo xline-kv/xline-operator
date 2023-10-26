@@ -1,11 +1,14 @@
 #![allow(dead_code)] // TODO remove when it is implemented
 
+use std::future::Future;
 use std::sync::Arc;
-use thiserror::Error;
+use std::time::Duration;
+
+use anyhow::Result;
 use tokio::select;
-use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
-use tokio::time::{Instant, Interval};
+use tokio::time::{interval, MissedTickBehavior};
+use tracing::debug;
 
 use crate::types::StatePayload;
 use crate::xline::XlineHandle;
@@ -18,61 +21,57 @@ pub(crate) struct Controller {
     /// Xline handle
     handle: Arc<XlineHandle>,
     /// Check interval
-    check_interval: Interval,
-    /// graceful shutdown signal
-    graceful_shutdown: Receiver<()>,
+    reconcile_interval: Duration,
 }
-
-/// All possible errors
-#[derive(Error, Debug, PartialEq)]
-pub(crate) enum Error {
-    /// Graceful shutdown error
-    #[error("operator has been shutdown")]
-    Shutdown,
-}
-
-/// Controller result
-type Result<T> = std::result::Result<T, Error>;
 
 impl Controller {
     /// Constructor
     pub(crate) fn new(
-        handle: Arc<XlineHandle>,
-        check_interval: Interval,
         state: Arc<Mutex<StatePayload>>,
-        graceful_shutdown: Receiver<()>,
+        handle: Arc<XlineHandle>,
+        reconcile_interval: Duration,
     ) -> Self {
         Self {
             state,
             handle,
-            check_interval,
-            graceful_shutdown,
+            reconcile_interval,
         }
     }
 
-    /// Perform a reconciliation
+    /// Run reconcile loop with shutdown
     #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
-    pub(crate) async fn reconcile_once(&mut self) -> Result<Instant> {
+    pub(crate) async fn run_reconcile_with_shutdown(
+        self,
+        graceful_shutdown: impl Future<Output = ()>,
+    ) -> Result<()> {
         select! {
-            _ = self.graceful_shutdown.changed() => {
-                // TODO notify the cluster of this node's shutdown
-                Err(Error::Shutdown)
+            _ = graceful_shutdown => {
+                Ok(())
             }
-            instant = self.check_interval.tick() => {
-                self.reconcile_inner().await.map(|_| instant)
+            res = self.run_reconcile() => {
+                res
             }
         }
     }
 
-    /// Reconciliation inner
-    async fn reconcile_inner(&mut self) -> Result<()> {
-        self.evaluate().await?;
-        self.execute().await
+    /// Run reconcile loop
+    pub(crate) async fn run_reconcile(self) -> Result<()> {
+        let mut tick = interval(self.reconcile_interval);
+        tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            let instant = tick.tick().await;
+            let _result = self.evaluate().await;
+            let _result1 = self.execute().await;
+            debug!(
+                "successfully reconcile the cluster states within {:?}",
+                instant.elapsed()
+            );
+        }
     }
 
     /// Evaluate cluster states
     #[allow(clippy::unused_async)] // TODO remove when it is implemented
-    async fn evaluate(&mut self) -> Result<()> {
+    async fn evaluate(&self) -> Result<()> {
         // TODO evaluate states
         Ok(())
     }

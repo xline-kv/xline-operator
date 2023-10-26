@@ -168,8 +168,9 @@ impl Operator {
                 .await;
             if let Err(err) = res {
                 error!("monitor run failed, error: {err}");
+            } else {
+                info!("sidecar monitor shutdown");
             }
-            info!("sidecar monitor shutdown");
         });
     }
 
@@ -196,8 +197,9 @@ impl Operator {
                 .await;
             if let Err(err) = res {
                 error!("web server starts failed, error: {err}");
+            } else {
+                info!("web server shut down");
             }
-            info!("web server shut down");
         });
 
         Ok(())

@@ -15,7 +15,6 @@ use tracing::{debug, error, info, warn};
 use crate::backup::pv::Pv;
 use crate::backup::Provider;
 use crate::controller::Controller;
-use crate::controller::Error;
 use crate::routers;
 use crate::types::{BackendConfig, BackupConfig, Config, State, StatePayload};
 use crate::xline::XlineHandle;
@@ -134,6 +133,7 @@ impl Sidecar {
     /// Start heartbeat
     fn start_heartbeat(&self, graceful_shutdown: Receiver<()>) {
         let Some(monitor) = self.config.monitor.clone() else {
+            info!("monitor did not set, disable heartbeat");
             return;
         };
         let cluster_name = self.config.cluster_name.clone();
@@ -177,29 +177,16 @@ impl Sidecar {
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) {
-        let mut controller = Controller::new(
-            handle,
-            interval(self.config.reconcile_interval),
-            state,
-            graceful_shutdown,
-        );
+        let controller = Controller::new(state, handle, self.config.reconcile_interval);
         let _ig = tokio::spawn(async move {
-            loop {
-                match controller.reconcile_once().await {
-                    Ok(instant) => {
-                        debug!(
-                            "successfully reconcile the cluster states within {:?}",
-                            instant.elapsed()
-                        );
-                    }
-                    Err(err) => {
-                        if err == Error::Shutdown {
-                            info!("controller graceful shutdown");
-                            break;
-                        }
-                        error!("reconcile failed, error: {}", err);
-                    }
-                }
+            let mut shutdown = graceful_shutdown;
+            let res = controller
+                .run_reconcile_with_shutdown(shutdown.changed().map(|_| ()))
+                .await;
+            if let Err(err) = res {
+                error!("controller run failed, error: {err}");
+            } else {
+                info!("controller shutdown");
             }
         });
     }

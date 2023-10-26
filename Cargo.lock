@@ -4116,7 +4116,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
  "toml 0.8.2",
  "tonic",
