@@ -76,7 +76,7 @@ function test::ci::_scale_cluster() {
 
 function test::ci::_random_crash() {
   size=$1
-  max_kill=$((size / 2))
+  max_kill=$(((size - 1) / 2))
   kill=$((RANDOM % max_kill + 1))
   log::info "random_crash_pods: size=$size, kill=$kill"
   for ((j = 0; j < kill; j++)); do
