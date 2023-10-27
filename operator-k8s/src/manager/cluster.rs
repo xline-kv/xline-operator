@@ -374,7 +374,10 @@ impl Factory {
         StatefulSet {
             metadata: self.general_metadata(Component::Nodes),
             spec: Some(StatefulSetSpec {
-                replicas: Some(size),
+                replicas: Some(
+                    i32::try_from(size)
+                        .unwrap_or_else(|_| unreachable!("size should not overflow i32::MAX")),
+                ),
                 selector: LabelSelector {
                     match_expressions: None,
                     match_labels: Some(labels),

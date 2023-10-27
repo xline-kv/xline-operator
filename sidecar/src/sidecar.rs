@@ -117,7 +117,7 @@ impl Sidecar {
             &self.config.xline.data_dir,
             backup,
             inner,
-            self.config.xline_port,
+            self.config.init_member.xline_port,
         )
     }
 
@@ -138,7 +138,7 @@ impl Sidecar {
         };
         let cluster_name = self.config.cluster_name.clone();
         let name = self.config.name.clone();
-        let init_members = self.config.init_sidecar_members();
+        let init_members = self.config.init_member.sidecar_members();
 
         #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
         let _ig = tokio::spawn(async move {
@@ -183,7 +183,7 @@ impl Sidecar {
             handle,
             self.config.reconcile_interval,
         );
-        let init_member_config = self.config.init_member_config();
+        let init_member_config = self.config.init_member.clone();
         let _ig = tokio::spawn(async move {
             let mut shutdown = graceful_shutdown;
             let res = controller
@@ -204,7 +204,7 @@ impl Sidecar {
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
-        let members = self.config.init_sidecar_members();
+        let members = self.config.init_member.sidecar_members();
         let advertise_url = members.get(&self.config.name).ok_or(anyhow!(
             "node name {} not found in members",
             self.config.name

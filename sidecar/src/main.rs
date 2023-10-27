@@ -146,7 +146,7 @@ use operator_api::consts::DEFAULT_DATA_DIR;
 use operator_api::XlineConfig;
 use tracing::debug;
 use xline_sidecar::sidecar::Sidecar;
-use xline_sidecar::types::{BackendConfig, BackupConfig, Config, MonitorConfig};
+use xline_sidecar::types::{BackendConfig, BackupConfig, Config, MemberConfig, MonitorConfig};
 
 /// `DEFAULT_DATA_DIR` to String
 fn default_data_dir() -> String {
@@ -216,9 +216,11 @@ impl From<Cli> for Config {
         Self {
             name: value.name.clone(),
             cluster_name: value.cluster_name,
-            init_members: value.init_members,
-            xline_port: value.xline_port,
-            sidecar_port: value.sidecar_port,
+            init_member: MemberConfig {
+                members: value.init_members,
+                xline_port: value.xline_port,
+                sidecar_port: value.sidecar_port,
+            },
             reconcile_interval: Duration::from_secs(value.reconcile_interval),
             backend: value.backend,
             xline: XlineConfig {

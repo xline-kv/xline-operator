@@ -112,6 +112,14 @@ impl XlineHandle {
         Ok(())
     }
 
+    /// Update member update the client
+    /// TODO: should xline client automatically discovery xlines?
+    pub(crate) async fn update_member(&mut self, xlines: &HashMap<String, String>) -> Result<()> {
+        let new_client = Client::connect(xlines.values(), ClientOptions::default()).await?;
+        _ = self.client.replace(new_client);
+        Ok(())
+    }
+
     /// Start the xline server
     pub(crate) async fn start(&mut self, xlines: &HashMap<String, String>) -> Result<()> {
         /// Timeout for test start

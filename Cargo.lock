@@ -372,6 +372,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "castaway"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a17ed5635fc8536268e5d4de1e22e81ac34419e5f052d4d51f4e01dcc263fcc"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,6 +530,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
+name = "compact_str"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f86b9c4c00838774a6d902ef931eff7470720c51d90c2e32cfe15dc304737b3f"
+dependencies = [
+ "castaway",
+ "cfg-if",
+ "itoa",
+ "ryu",
+ "static_assertions",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -562,10 +584,10 @@ dependencies = [
  "garde",
  "k8s-openapi",
  "kube",
+ "regex",
  "schemars",
  "serde",
  "serde_json",
- "serde_yaml",
  "tokio",
  "tracing",
 ]
@@ -1095,20 +1117,23 @@ dependencies = [
 
 [[package]]
 name = "garde"
-version = "0.11.2"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d959ef7bda0bda7cc0f6fbebfbac6202f810394f50e07059eeea8ec31e69e4b0"
+checksum = "d16596022bab79d38f74999f49b2fa08db8e4e568b43a95a2bd78afbee13f55c"
 dependencies = [
+ "compact_str",
  "garde_derive",
  "once_cell",
  "regex",
+ "smallvec",
+ "url",
 ]
 
 [[package]]
 name = "garde_derive"
-version = "0.11.2"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e89f7fce035bb3a3718e23efff13709a0b21b694c4eae20a32e1a3e4e27c6a2"
+checksum = "38ae3270e3d5914fcf8ac7b3f77d2e7d424018913e62f5f3ade51995da109412"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3090,6 +3115,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3405,19 +3436,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.19.15",
-]
-
-[[package]]
-name = "toml"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "185d8ab0dfbb35cf1399a6344d8484209c088f75f8f68230da55d48d95d43e3d"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime",
- "toml_edit 0.20.2",
+ "toml_edit",
 ]
 
 [[package]]
@@ -3434,19 +3453,6 @@ name = "toml_edit"
 version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
-dependencies = [
- "indexmap 2.0.2",
- "serde",
- "serde_spanned",
- "toml_datetime",
- "winnow",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
 dependencies = [
  "indexmap 2.0.2",
  "serde",
@@ -4108,10 +4114,9 @@ dependencies = [
  "kube",
  "operator-api",
  "prometheus",
- "schemars",
  "serde",
  "serde_json",
- "thiserror",
+ "serde_yaml",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4131,9 +4136,7 @@ dependencies = [
  "operator-api",
  "reqwest",
  "serde",
- "serde_json",
  "tokio",
- "toml 0.8.2",
  "tonic",
  "tonic-health",
  "tracing",

@@ -166,11 +166,7 @@ impl SidecarMonitor {
     /// Get the certain cluster size in the specification
     async fn get_spec_size(&self, cluster_name: &str) -> Result<usize> {
         let cluster = self.ctx.cluster_api.get(cluster_name).await?;
-        Ok(cluster
-            .spec
-            .size
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("the spec size should not be negative")))
+        Ok(cluster.spec.size)
     }
 }
 

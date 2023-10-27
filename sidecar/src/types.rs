@@ -16,12 +16,8 @@ pub struct Config {
     pub name: String,
     /// The cluster name
     pub cluster_name: String,
-    /// Nodes initial hosts, [pod_name]->[pod_host]
-    pub init_members: HashMap<String, String>,
-    /// The xline server port
-    pub xline_port: u16,
-    /// The sidecar web server port
-    pub sidecar_port: u16,
+    /// Initial member config
+    pub init_member: MemberConfig,
     /// Reconcile cluster interval
     pub reconcile_interval: Duration,
     /// The xline config
@@ -47,13 +43,14 @@ pub struct MonitorConfig {
 
 /// Member config
 #[derive(Debug, Clone)]
-pub(crate) struct MemberConfig {
+#[allow(clippy::exhaustive_structs)] // It is only constructed once
+pub struct MemberConfig {
     /// Nodes hosts, [pod_name]->[pod_host]
-    pub(crate) members: HashMap<String, String>,
+    pub members: HashMap<String, String>,
     /// The xline server port
-    pub(crate) xline_port: u16,
+    pub xline_port: u16,
     /// The sidecar web server port
-    pub(crate) sidecar_port: u16,
+    pub sidecar_port: u16,
 }
 
 /// Sidecar backend, it determinate how xline could be setup
@@ -87,35 +84,6 @@ pub enum BackupConfig {
         /// Mounted path of pv
         path: PathBuf,
     },
-}
-
-impl Config {
-    /// Get the initial sidecar members
-    pub(crate) fn init_sidecar_members(&self) -> HashMap<String, String> {
-        self.init_members
-            .clone()
-            .into_iter()
-            .map(|(name, host)| (name, format!("{host}:{}", self.sidecar_port)))
-            .collect()
-    }
-
-    /// Get the initial xline members
-    pub(crate) fn init_xline_members(&self) -> HashMap<String, String> {
-        self.init_members
-            .clone()
-            .into_iter()
-            .map(|(name, host)| (name, format!("{host}:{}", self.xline_port)))
-            .collect()
-    }
-
-    /// Get the initial member config
-    pub(crate) fn init_member_config(&self) -> MemberConfig {
-        MemberConfig {
-            members: self.init_members.clone(),
-            xline_port: self.xline_port,
-            sidecar_port: self.sidecar_port,
-        }
-    }
 }
 
 impl MemberConfig {

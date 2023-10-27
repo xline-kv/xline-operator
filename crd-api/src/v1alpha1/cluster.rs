@@ -2,17 +2,16 @@
 #![allow(clippy::str_to_string)]
 #![allow(clippy::missing_docs_in_private_items)]
 
-#[cfg(test)]
 use garde::Validate;
 use k8s_openapi::api::core::v1::{Affinity, Container, PersistentVolumeClaim};
 use k8s_openapi::serde::{Deserialize, Serialize};
 use kube::CustomResource;
 use schemars::JsonSchema;
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 /// Xline cluster specification
-#[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
-#[cfg_attr(test, derive(Validate))]
+#[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema, Validate)]
 #[kube(
     group = "xlineoperator.xline.cloud",
     version = "v1alpha1",
@@ -29,63 +28,59 @@ use std::collections::HashMap;
     printcolumn = r#"{"name":"Backup Cron", "type":"string", "description":"The cron spec defining the interval a backup CronJob is run", "jsonPath":".spec.backup.cron"}"#,
     printcolumn = r#"{"name":"Age", "type":"date", "description":"The cluster age", "jsonPath":".metadata.creationTimestamp"}"#
 )]
+#[schemars(rename_all = "camelCase")]
+#[garde(allow_unvalidated)]
 pub struct ClusterSpec {
     /// Size of the xline cluster, less than 3 is not allowed
-    #[cfg_attr(test, garde(range(min = 3)))]
+    #[garde(range(min = 3))]
     #[schemars(range(min = 3))]
-    pub size: i32,
+    pub size: usize,
     /// Xline container specification
-    #[cfg_attr(test, garde(skip))]
     pub container: Container,
     /// The affinity of the xline node
-    #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<Affinity>,
     /// Backup specification
-    #[cfg_attr(test, garde(custom(option_backup_dive)))]
+    #[garde(dive)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup: Option<BackupSpec>,
     /// The data PVC, if it is not specified, then use emptyDir instead
-    #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<PersistentVolumeClaim>,
     /// Some user defined persistent volume claim templates
-    #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pvcs: Option<Vec<PersistentVolumeClaim>>,
 }
 
 /// Xline cluster backup specification
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[cfg_attr(test, derive(Validate))]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Validate)]
 pub struct BackupSpec {
     /// Cron Spec
-    #[cfg_attr(test, garde(pattern(r"^(?:\*|[0-5]?\d)(?:[-/,]?(?:\*|[0-5]?\d))*(?: +(?:\*|1?[0-9]|2[0-3])(?:[-/,]?(?:\*|1?[0-9]|2[0-3]))*){4}$")))]
+    #[garde(pattern(r"^(?:\*|[0-5]?\d)(?:[-/,]?(?:\*|[0-5]?\d))*(?: +(?:\*|1?[0-9]|2[0-3])(?:[-/,]?(?:\*|1?[0-9]|2[0-3]))*){4}$"))]
     #[schemars(regex(
         pattern = r"^(?:\*|[0-5]?\d)(?:[-/,]?(?:\*|[0-5]?\d))*(?: +(?:\*|1?[0-9]|2[0-3])(?:[-/,]?(?:\*|1?[0-9]|2[0-3]))*){4}$"
     ))]
     pub cron: String,
     /// Backup storage type
-    #[cfg_attr(test, garde(dive))]
+    #[garde(dive)]
     #[serde(flatten)]
     pub storage: StorageSpec,
 }
 
 /// Xline cluster backup storage specification
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[cfg_attr(test, derive(Validate))]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Validate)]
 #[serde(untagged)]
 pub enum StorageSpec {
     /// S3 backup type
     S3 {
         /// S3 backup specification
-        #[cfg_attr(test, garde(dive))]
+        #[garde(dive)]
         s3: S3Spec,
     },
     /// Persistent volume backup type
     Pvc {
         /// Persistent volume claim
-        #[cfg_attr(test, garde(skip))]
+        #[garde(skip)]
         pvc: PersistentVolumeClaim,
     },
 }
@@ -100,32 +95,24 @@ impl StorageSpec {
 }
 
 /// Xline cluster backup S3 specification
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[cfg_attr(test, derive(Validate))]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Validate)]
 pub struct S3Spec {
     /// S3 bucket name to use for backup
-    #[cfg_attr(test, garde(pattern(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")))]
+    #[garde(pattern(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"))]
     #[schemars(regex(pattern = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"))]
     pub bucket: String,
 }
 
 /// Xline cluster status
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, Validate)]
+#[garde(context(ClusterSpec as ctx))]
 pub struct ClusterStatus {
     /// The available nodes' number in the cluster
-    pub available: i32,
+    #[garde(range(max = ctx.size))]
+    pub available: usize,
     /// The members registry
-    pub members: HashMap<String, String>,
-}
-
-#[cfg(test)]
-#[allow(clippy::trivially_copy_pass_by_ref)] // required bt garde
-fn option_backup_dive(value: &Option<BackupSpec>, _cx: &()) -> garde::Result {
-    if let Some(spec) = value.as_ref() {
-        spec.validate(&())
-            .map_err(|e| garde::Error::new(e.to_string()))?;
-    }
-    Ok(())
+    #[garde(skip)]
+    pub members: HashMap<String, IpAddr>,
 }
 
 #[cfg(test)]
@@ -168,10 +155,10 @@ mod test {
             pvcs: None,
             data: None,
         };
-        assert_eq!(
-            Validate::validate(&bad_size, &()).unwrap_err().flatten()[0].0,
-            "value.size"
-        );
+        assert!(Validate::validate(&bad_size, &())
+            .unwrap_err()
+            .to_string()
+            .contains("size"));
     }
 
     #[test]
@@ -189,10 +176,10 @@ mod test {
             pvcs: None,
             data: None,
         };
-        assert_eq!(
-            Validate::validate(&bad_cron, &()).unwrap_err().flatten()[0].0,
-            "value.backup"
-        );
+        assert!(Validate::validate(&bad_cron, &())
+            .unwrap_err()
+            .to_string()
+            .contains("backup.cron"));
     }
 
     #[test]
@@ -212,9 +199,9 @@ mod test {
             pvcs: None,
             data: None,
         };
-        assert_eq!(
-            Validate::validate(&bad_bucket, &()).unwrap_err().flatten()[0].0,
-            "value.backup"
-        );
+        assert!(Validate::validate(&bad_bucket, &())
+            .unwrap_err()
+            .to_string()
+            .contains("backup.storage.s3.bucket"))
     }
 }
