@@ -4,7 +4,7 @@ use operator_api::XlineConfig;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
-use std::ops::AddAssign;
+use std::ops::{Add, AddAssign, Div};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -16,7 +16,7 @@ pub struct Config {
     pub name: String,
     /// The cluster name
     pub cluster_name: String,
-    /// Sidecar initial hosts, [pod_name]->[pod_host]
+    /// Nodes initial hosts, [pod_name]->[pod_host]
     pub init_members: HashMap<String, String>,
     /// The xline server port
     pub xline_port: u16,
@@ -43,6 +43,17 @@ pub struct MonitorConfig {
     pub monitor_addr: String,
     /// heartbeat interval
     pub heartbeat_interval: Duration,
+}
+
+/// Member config
+#[derive(Debug, Clone)]
+pub(crate) struct MemberConfig {
+    /// Nodes hosts, [pod_name]->[pod_host]
+    pub(crate) members: HashMap<String, String>,
+    /// The xline server port
+    pub(crate) xline_port: u16,
+    /// The sidecar web server port
+    pub(crate) sidecar_port: u16,
 }
 
 /// Sidecar backend, it determinate how xline could be setup
@@ -80,9 +91,7 @@ pub enum BackupConfig {
 
 impl Config {
     /// Get the initial sidecar members
-    #[must_use]
-    #[inline]
-    pub fn init_sidecar_members(&self) -> HashMap<String, String> {
+    pub(crate) fn init_sidecar_members(&self) -> HashMap<String, String> {
         self.init_members
             .clone()
             .into_iter()
@@ -91,14 +100,47 @@ impl Config {
     }
 
     /// Get the initial xline members
-    #[must_use]
-    #[inline]
-    pub fn init_xline_members(&self) -> HashMap<String, String> {
+    pub(crate) fn init_xline_members(&self) -> HashMap<String, String> {
         self.init_members
             .clone()
             .into_iter()
             .map(|(name, host)| (name, format!("{host}:{}", self.xline_port)))
             .collect()
+    }
+
+    /// Get the initial member config
+    pub(crate) fn init_member_config(&self) -> MemberConfig {
+        MemberConfig {
+            members: self.init_members.clone(),
+            xline_port: self.xline_port,
+            sidecar_port: self.sidecar_port,
+        }
+    }
+}
+
+impl MemberConfig {
+    /// Get the xline members
+    pub(crate) fn xline_members(&self) -> HashMap<String, String> {
+        self.members
+            .clone()
+            .into_iter()
+            .map(|(name, host)| (name, format!("{host}:{}", self.xline_port)))
+            .collect()
+    }
+
+    /// Get the sidecar members
+    pub(crate) fn sidecar_members(&self) -> HashMap<String, String> {
+        self.members
+            .clone()
+            .into_iter()
+            .map(|(name, host)| (name, format!("{host}:{}", self.sidecar_port)))
+            .collect()
+    }
+
+    /// Get the majority count
+
+    pub(crate) fn majority_cnt(&self) -> usize {
+        self.members.len().div(2).add(1)
     }
 }
 
@@ -144,7 +186,7 @@ impl StateStatus {
         for (name, addr) in sidecars {
             let url = format!("http://{addr}{SIDECAR_STATE_ROUTE}");
             let state: StatePayload = reqwest::get(url).await?.json().await?;
-            if state.revision > max_rev {
+            if (state.revision, name.as_str()) > (max_rev, seeder) {
                 max_rev = state.revision;
                 seeder = name;
             }

@@ -4,20 +4,21 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use bytes::Buf;
 use engine::{Engine, EngineType, StorageEngine};
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-use operator_api::consts::DEFAULT_DATA_DIR;
 use tonic::transport::{Channel, Endpoint};
 use tonic_health::pb::health_check_response::ServingStatus;
 use tonic_health::pb::health_client::HealthClient;
 use tonic_health::pb::HealthCheckRequest;
-use tracing::debug;
-use xline_client::types::cluster::{MemberAddRequest, MemberListRequest, MemberRemoveRequest};
+use tracing::{debug, info};
+use xline_client::types::cluster::{
+    MemberAddRequest, MemberListRequest, MemberRemoveRequest, MemberUpdateRequest,
+};
 use xline_client::types::kv::RangeRequest;
 use xline_client::{Client, ClientOptions};
 
@@ -52,6 +53,8 @@ pub(crate) const XLINE_TABLES: [&str; 6] = [
 pub(crate) struct XlineHandle {
     /// The name of the operator
     name: String,
+    /// The xline data dir
+    data_dir: PathBuf,
     /// The xline backup provider
     backup: Option<Box<dyn Provider>>,
     /// The xline client, used to connect to the cluster
@@ -62,8 +65,6 @@ pub(crate) struct XlineHandle {
     server_id: Option<u64>,
     /// The rocks db engine
     engine: Engine,
-    /// The xline members
-    xline_members: HashMap<String, String>,
     /// Health retires of xline client
     is_healthy_retries: usize,
     /// The detailed xline process handle
@@ -74,24 +75,25 @@ impl XlineHandle {
     /// Create the xline handle but not start the xline node
     pub(crate) fn open(
         name: &str,
+        data_dir: &str,
         backup: Option<Box<dyn Provider>>,
         inner: Box<dyn operator_api::XlineHandle>,
         xline_port: u16,
-        xline_members: HashMap<String, String>,
     ) -> Result<Self> {
         debug!("name: {name}, backup: {backup:?}, xline_port: {xline_port}");
         let endpoint: Endpoint = format!("http://127.0.0.1:{xline_port}").parse()?;
         let channel = Channel::balance_list(std::iter::once(endpoint));
         let health_client = HealthClient::new(channel);
-        let engine = Engine::new(EngineType::Rocks(DEFAULT_DATA_DIR.parse()?), &XLINE_TABLES)?;
+        let data_path: PathBuf = data_dir.parse()?;
+        let engine = Engine::new(EngineType::Rocks(data_path.clone()), &XLINE_TABLES)?;
         Ok(Self {
             name: name.to_owned(),
+            data_dir: data_path,
             backup,
             health_client,
             engine,
             client: None,
             server_id: None,
-            xline_members,
             is_healthy_retries: 5,
             inner,
         })
@@ -104,49 +106,76 @@ impl XlineHandle {
             .unwrap_or_else(|| panic!("xline client not initialized"))
     }
 
+    /// Cleanup data directory
+    pub(crate) async fn cleanup(&self) -> Result<()> {
+        tokio::fs::remove_dir_all(&self.data_dir).await?;
+        Ok(())
+    }
+
     /// Start the xline server
-    pub(crate) async fn start(&mut self) -> Result<()> {
+    pub(crate) async fn start(&mut self, xlines: &HashMap<String, String>) -> Result<()> {
+        /// Timeout for test start
+        const TEST_START_TIMEOUT: Duration = Duration::from_secs(3);
+
         // TODO: hold a distributed lock during start
 
         // Step 1: Check if there is any node running
         // Step 2: If there is no node running, start single node cluster
-        // Step 3: If there are some nodes running, start the node as a member to join the cluster
-        let others = self
-            .xline_members
-            .iter()
-            .filter(|&(name, _)| name != &self.name)
-            .map(|(_, addr)| {
-                Ok::<_, tonic::transport::Error>(
-                    Endpoint::from_shared(addr.clone())?.connect_timeout(Duration::from_secs(3)),
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let futs: FuturesUnordered<_> = others.iter().map(Endpoint::connect).collect();
+        // Step 3: If there are some nodes running, start the node as a member to join/update the cluster
+
+        let self_addr = xlines
+            .get(&self.name)
+            .ok_or_else(|| anyhow!("self name should be in xline members"))?
+            .clone();
+        let mut start_members = HashMap::from([(self.name.clone(), self_addr.clone())]);
         // the cluster is started if any of the connection is successful
-        let cluster_started = futs.any(|res| async move { res.is_ok() }).await;
+        let mut cluster_started = false;
 
-        self.inner.start(&self.xline_members).await?;
+        for (name, addr) in xlines.iter().filter(|&(name, _)| name != &self.name) {
+            let online = Endpoint::from_shared(addr.clone())?
+                .connect_timeout(TEST_START_TIMEOUT)
+                .connect()
+                .await
+                .is_ok();
+            if online {
+                cluster_started = true;
+                let _ig = start_members.insert(name.clone(), addr.clone());
+            }
+        }
 
-        let client = Client::connect(self.xline_members.values(), ClientOptions::default()).await?;
+        self.inner.start(&start_members).await?;
+
+        let client = Client::connect(xlines.values(), ClientOptions::default()).await?;
         let mut cluster_client = client.cluster_client();
+
+        let mut members = cluster_client
+            .member_list(MemberListRequest::new(false))
+            .await?
+            .members;
+
         let member = if cluster_started {
-            let peer_addr = self
-                .xline_members
-                .get(&self.name)
-                .unwrap_or_else(|| unreachable!("member should contain self"))
-                .clone();
-            let resp = cluster_client
-                .member_add(MemberAddRequest::new(vec![peer_addr], false))
-                .await?;
-            let Some(member) = resp.member else {
-                unreachable!("self member should be set when member add request success")
-            };
-            member
+            let joined = members.iter().find(|mem| mem.name == self.name);
+            if let Some(old_member) = joined {
+                let _ig = cluster_client
+                    .member_update(MemberUpdateRequest::new(
+                        old_member.id,
+                        vec![self_addr.clone()],
+                    ))
+                    .await?;
+                let mut new_member = old_member.clone();
+                new_member.peer_ur_ls = vec![self_addr.clone()];
+                new_member.client_ur_ls = vec![self_addr.clone()];
+                new_member
+            } else {
+                let resp = cluster_client
+                    .member_add(MemberAddRequest::new(vec![self_addr.clone()], false))
+                    .await?;
+                let Some(member) = resp.member else {
+                    unreachable!("self member should be set when member add request success")
+                };
+                member
+            }
         } else {
-            let mut members = cluster_client
-                .member_list(MemberListRequest::new(false))
-                .await?
-                .members;
             if members.len() != 1 {
                 return Err(anyhow!(
                     "there should be only one member(self) if the cluster if not start"
@@ -169,6 +198,7 @@ impl XlineHandle {
             .take()
             .ok_or_else(|| anyhow!("xline server should not be stopped before started"))?;
 
+        // double check for cluster health
         if self.is_healthy().await {
             let mut cluster_client = self.client().cluster_client();
             _ = cluster_client
@@ -253,7 +283,10 @@ impl XlineHandle {
         //         If the local revision is less than remote, abort backup
         // Step 3. Start backup
         let backup = match self.backup.as_ref() {
-            None => return Err(anyhow!("no backup specified")),
+            None => {
+                info!("no backup config found, skip backup");
+                return Ok(());
+            }
             Some(backup) => backup,
         };
         let remote = backup.latest().await?.map(|metadata| metadata.revision);
@@ -280,4 +313,50 @@ impl XlineHandle {
             .await?;
         Ok(())
     }
+
+    /// Install backup, make sure that xline is shutdown
+    pub(crate) async fn install_backup(&self) -> Result<()> {
+        let backup = match self.backup.as_ref() {
+            None => {
+                info!("no backup config found, skip install backup");
+                return Ok(());
+            }
+            Some(backup) => backup,
+        };
+        let Some(latest) = backup.latest().await? else {
+            info!("no backup found, skip install backup");
+            return Ok(())
+        };
+        if !self.data_dir.exists() {
+            debug!("data directory not found, install backup");
+            let local = backup.load(&latest).await?;
+            copy_recursively(&local, &self.data_dir)?;
+            tokio::fs::remove_dir_all(local).await?;
+            return Ok(());
+        }
+        if latest.revision <= self.revision_offline()? {
+            info!("remote revision is less than local, skip install backup");
+            return Ok(());
+        }
+        tokio::fs::remove_dir_all(&self.data_dir).await?;
+        let local = backup.load(&latest).await?;
+        copy_recursively(&local, &self.data_dir)?;
+        tokio::fs::remove_dir_all(local).await?;
+        Ok(())
+    }
+}
+
+/// Copy directory
+fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
+    std::fs::create_dir_all(&destination)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let filetype = entry.file_type()?;
+        if filetype.is_dir() {
+            copy_recursively(entry.path(), destination.as_ref().join(entry.file_name()))?;
+        } else {
+            let _ig = std::fs::copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }

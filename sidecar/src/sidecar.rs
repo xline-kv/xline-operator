@@ -8,7 +8,7 @@ use futures::{FutureExt, TryFutureExt};
 use operator_api::consts::{SIDECAR_BACKUP_ROUTE, SIDECAR_HEALTH_ROUTE, SIDECAR_STATE_ROUTE};
 use operator_api::{HeartbeatStatus, K8sXlineHandle, LocalXlineHandle};
 use tokio::sync::watch::{Receiver, Sender};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{debug, error, info, warn};
 
@@ -42,8 +42,8 @@ impl Sidecar {
     pub async fn run(&self) -> Result<()> {
         let (graceful_shutdown_event, _) = tokio::sync::watch::channel(());
         let forceful_shutdown = self.forceful_shutdown(&graceful_shutdown_event);
-        let handle = Arc::new(self.init_xline_handle().await?);
-        let revision = handle.revision_offline().unwrap_or(1);
+        let handle = Arc::new(RwLock::new(self.init_xline_handle().await?));
+        let revision = handle.read().await.revision_offline().unwrap_or(1);
         let state = Arc::new(Mutex::new(StatePayload {
             state: State::Start,
             revision,
@@ -114,10 +114,10 @@ impl Sidecar {
         };
         XlineHandle::open(
             &self.config.name,
+            &self.config.xline.data_dir,
             backup,
             inner,
             self.config.xline_port,
-            self.config.init_xline_members(),
         )
     }
 
@@ -173,15 +173,21 @@ impl Sidecar {
     /// Start controller
     fn start_controller(
         &self,
-        handle: Arc<XlineHandle>,
+        handle: Arc<RwLock<XlineHandle>>,
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) {
-        let controller = Controller::new(state, handle, self.config.reconcile_interval);
+        let controller = Controller::new(
+            self.config.name.clone(),
+            state,
+            handle,
+            self.config.reconcile_interval,
+        );
+        let init_member_config = self.config.init_member_config();
         let _ig = tokio::spawn(async move {
             let mut shutdown = graceful_shutdown;
             let res = controller
-                .run_reconcile_with_shutdown(shutdown.changed().map(|_| ()))
+                .run_reconcile_with_shutdown(init_member_config, shutdown.changed().map(|_| ()))
                 .await;
             if let Err(err) = res {
                 error!("controller run failed, error: {err}");
@@ -194,7 +200,7 @@ impl Sidecar {
     /// Run a web server to expose current state to other sidecar operators and k8s
     fn start_web_server(
         &self,
-        handle: Arc<XlineHandle>,
+        handle: Arc<RwLock<XlineHandle>>,
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {

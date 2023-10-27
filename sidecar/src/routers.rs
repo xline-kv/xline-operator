@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 use axum::{Extension, Json};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::types::{MembershipChange, StatePayload};
 use crate::utils::{check_backup_volume, check_data_volume};
@@ -22,8 +22,8 @@ pub(crate) async fn health() -> StatusCode {
 }
 
 /// Backup hook
-pub(crate) async fn backup(Extension(handle): Extension<Arc<XlineHandle>>) -> StatusCode {
-    if handle.backup().await.is_err() {
+pub(crate) async fn backup(Extension(handle): Extension<Arc<RwLock<XlineHandle>>>) -> StatusCode {
+    if handle.read().await.backup().await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
     StatusCode::OK
