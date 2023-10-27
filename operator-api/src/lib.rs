@@ -1,6 +1,9 @@
 /// constants shared by the operator and the sidecar
 pub mod consts;
 
+/// Config registry
+pub mod registry;
+
 /// Xline handle
 mod xline;
 
