@@ -8,6 +8,7 @@ use k8s_openapi::api::core::v1::{Affinity, Container, PersistentVolumeClaim};
 use k8s_openapi::serde::{Deserialize, Serialize};
 use kube::CustomResource;
 use schemars::JsonSchema;
+use std::collections::HashMap;
 
 /// Xline cluster specification
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
@@ -113,6 +114,8 @@ pub(crate) struct S3Spec {
 pub(crate) struct ClusterStatus {
     /// The available nodes' number in the cluster
     pub(crate) available: i32,
+    /// The members registry
+    pub(crate) members: HashMap<String, String>,
 }
 
 #[cfg(test)]
