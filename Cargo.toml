@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crd-api",
     "operator-api",
     "operator-k8s",
     "sidecar",

@@ -35,7 +35,5 @@ tokio = { version = "1.0", features = [
 ] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+crd-api = { path = "../crd-api" }
 
-[dev-dependencies]
-garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }
-serde_yaml = "0.9.25"

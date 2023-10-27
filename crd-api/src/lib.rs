@@ -2,13 +2,13 @@
 /// Features:
 ///     1. Xline sidecar
 ///     2. PV backup
-pub(crate) mod v1alpha1;
+pub mod v1alpha1;
 
 /// CRD version
-pub(crate) mod version;
+pub mod version;
 
 /// Current CRD `XineCluster`
-pub(crate) use v1alpha1::Cluster;
+pub use v1alpha1::Cluster;
 
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::runtime::conditions;
@@ -22,7 +22,7 @@ use std::time::Duration;
 const CRD_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Setup CRD
-pub(crate) async fn setup(
+pub async fn setup(
     kube_client: &Client,
     manage_crd: bool,
     auto_migration: bool,

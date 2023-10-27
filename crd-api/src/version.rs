@@ -1,5 +1,3 @@
-#![allow(unused)] // TODO Remove
-
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
@@ -10,7 +8,7 @@ use anyhow::anyhow;
 /// The api version, the generic CR here to prevent from comparing `ApiVersion<CR1>` to `ApiVersion<CR2>`
 #[non_exhaustive]
 #[derive(Clone, Debug)]
-pub(crate) enum ApiVersion<CR> {
+pub enum ApiVersion<CR> {
     /// alpha version e.g. v1alpha1 => Alpha(1, 1)
     Alpha(u32, u32, PhantomData<CR>),
     /// beta version e.g. v2beta3 => Beta(2, 3)
@@ -23,21 +21,21 @@ impl<CR> ApiVersion<CR> {
     /// Create alpha version
     #[must_use]
     #[inline]
-    pub(crate) fn alpha(main: u32, sub: u32) -> Self {
+    pub fn alpha(main: u32, sub: u32) -> Self {
         Self::Alpha(main, sub, PhantomData)
     }
 
     /// Create beta version
     #[must_use]
     #[inline]
-    pub(crate) fn beta(main: u32, sub: u32) -> Self {
+    pub fn beta(main: u32, sub: u32) -> Self {
         Self::Beta(main, sub, PhantomData)
     }
 
     /// Create beta version
     #[must_use]
     #[inline]
-    pub(crate) fn stable(main: u32) -> Self {
+    pub fn stable(main: u32) -> Self {
         Self::Stable(main, PhantomData)
     }
 
@@ -45,7 +43,7 @@ impl<CR> ApiVersion<CR> {
     /// We promise that we keep compatible with the same main version
     #[must_use]
     #[inline]
-    pub(crate) fn compat_with(&self, other: &Self) -> bool {
+    pub fn compat_with(&self, other: &Self) -> bool {
         self.main_version() == other.main_version()
     }
 

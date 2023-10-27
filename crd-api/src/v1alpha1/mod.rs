@@ -1,15 +1,17 @@
-pub(crate) use cluster::Cluster;
+pub use cluster::Cluster;
 
 mod cluster;
 
-use crate::consts::FIELD_MANAGER;
-use crate::crd::version::ApiVersion;
-use crate::crd::wait_crd_established;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::{DynamicObject, ListParams, Patch, PatchParams};
 use kube::core::crd::merge_crds;
 use kube::{Api, Client, CustomResourceExt, Resource};
 use tracing::{debug, info};
+
+use crate::version::ApiVersion;
+use crate::wait_crd_established;
+
+const FIELD_MANAGER: &str = "xlineoperator.datenlord.io/crd";
 
 /// Setup CRD
 pub(super) async fn set_up(

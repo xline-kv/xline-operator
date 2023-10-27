@@ -1,0 +1,26 @@
+[package]
+name = "crd-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["DatenLord <dev@datenlord.io>"]
+description = "Custom Resource Definition"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/xline-kv/xline-operator/tree/main/crd-api"
+categories = ["API"]
+keywords = ["operator", "API"]
+
+[dependencies]
+k8s-openapi = { version = "0.20.0", features = ["v1_28", "schemars"] }
+kube = { version = "0.86.0", features = ["runtime", "derive"] }
+schemars = "0.8.6"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.97"
+tracing = "0.1.37"
+anyhow = "1.0.75"
+tokio = { version = "1.0", features = ["time"] }
+
+
+[dev-dependencies]
+garde = { version = "0.11.2", default-features = false, features = ["derive", "pattern"] }
+serde_yaml = "0.9.25"

@@ -555,6 +555,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "crd-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "garde",
+ "k8s-openapi",
+ "kube",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4084,9 +4100,9 @@ dependencies = [
  "axum",
  "clap 4.4.6",
  "clippy-utilities 0.2.0",
+ "crd-api",
  "flume 0.11.0",
  "futures",
- "garde",
  "k8s-openapi",
  "kube",
  "operator-api",
@@ -4094,7 +4110,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "serde_yaml",
  "thiserror",
  "tokio",
  "tracing",

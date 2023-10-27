@@ -29,53 +29,53 @@ use std::collections::HashMap;
     printcolumn = r#"{"name":"Backup Cron", "type":"string", "description":"The cron spec defining the interval a backup CronJob is run", "jsonPath":".spec.backup.cron"}"#,
     printcolumn = r#"{"name":"Age", "type":"date", "description":"The cluster age", "jsonPath":".metadata.creationTimestamp"}"#
 )]
-pub(crate) struct ClusterSpec {
+pub struct ClusterSpec {
     /// Size of the xline cluster, less than 3 is not allowed
     #[cfg_attr(test, garde(range(min = 3)))]
     #[schemars(range(min = 3))]
-    pub(crate) size: i32,
+    pub size: i32,
     /// Xline container specification
     #[cfg_attr(test, garde(skip))]
-    pub(crate) container: Container,
+    pub container: Container,
     /// The affinity of the xline node
     #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) affinity: Option<Affinity>,
+    pub affinity: Option<Affinity>,
     /// Backup specification
     #[cfg_attr(test, garde(custom(option_backup_dive)))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) backup: Option<BackupSpec>,
+    pub backup: Option<BackupSpec>,
     /// The data PVC, if it is not specified, then use emptyDir instead
     #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) data: Option<PersistentVolumeClaim>,
+    pub data: Option<PersistentVolumeClaim>,
     /// Some user defined persistent volume claim templates
     #[cfg_attr(test, garde(skip))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) pvcs: Option<Vec<PersistentVolumeClaim>>,
+    pub pvcs: Option<Vec<PersistentVolumeClaim>>,
 }
 
 /// Xline cluster backup specification
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[cfg_attr(test, derive(Validate))]
-pub(crate) struct BackupSpec {
+pub struct BackupSpec {
     /// Cron Spec
     #[cfg_attr(test, garde(pattern(r"^(?:\*|[0-5]?\d)(?:[-/,]?(?:\*|[0-5]?\d))*(?: +(?:\*|1?[0-9]|2[0-3])(?:[-/,]?(?:\*|1?[0-9]|2[0-3]))*){4}$")))]
     #[schemars(regex(
         pattern = r"^(?:\*|[0-5]?\d)(?:[-/,]?(?:\*|[0-5]?\d))*(?: +(?:\*|1?[0-9]|2[0-3])(?:[-/,]?(?:\*|1?[0-9]|2[0-3]))*){4}$"
     ))]
-    pub(crate) cron: String,
+    pub cron: String,
     /// Backup storage type
     #[cfg_attr(test, garde(dive))]
     #[serde(flatten)]
-    pub(crate) storage: StorageSpec,
+    pub storage: StorageSpec,
 }
 
 /// Xline cluster backup storage specification
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[cfg_attr(test, derive(Validate))]
 #[serde(untagged)]
-pub(crate) enum StorageSpec {
+pub enum StorageSpec {
     /// S3 backup type
     S3 {
         /// S3 backup specification
@@ -91,7 +91,7 @@ pub(crate) enum StorageSpec {
 }
 
 impl StorageSpec {
-    pub(crate) fn as_pvc(&self) -> Option<&PersistentVolumeClaim> {
+    pub fn as_pvc(&self) -> Option<&PersistentVolumeClaim> {
         match *self {
             Self::Pvc { ref pvc } => Some(pvc),
             Self::S3 { .. } => None,
@@ -102,20 +102,20 @@ impl StorageSpec {
 /// Xline cluster backup S3 specification
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[cfg_attr(test, derive(Validate))]
-pub(crate) struct S3Spec {
+pub struct S3Spec {
     /// S3 bucket name to use for backup
     #[cfg_attr(test, garde(pattern(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")))]
     #[schemars(regex(pattern = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"))]
-    pub(crate) bucket: String,
+    pub bucket: String,
 }
 
 /// Xline cluster status
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-pub(crate) struct ClusterStatus {
+pub struct ClusterStatus {
     /// The available nodes' number in the cluster
-    pub(crate) available: i32,
+    pub available: i32,
     /// The members registry
-    pub(crate) members: HashMap<String, String>,
+    pub members: HashMap<String, String>,
 }
 
 #[cfg(test)]

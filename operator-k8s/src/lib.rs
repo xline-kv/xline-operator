@@ -155,8 +155,6 @@ pub mod config;
 mod consts;
 /// Custom resource controller
 mod controller;
-/// Custom resource definition
-mod crd;
 /// Custom resource manager
 mod manager;
 /// Sidecar monitor
@@ -165,3 +163,8 @@ mod monitor;
 pub mod operator;
 /// Xline operator web server router
 mod router;
+
+/// Custom resource definition
+mod crd {
+    pub(crate) use crd_api::*;
+}
