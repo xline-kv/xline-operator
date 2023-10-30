@@ -6,6 +6,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Router};
 use futures::{FutureExt, TryFutureExt};
 use operator_api::consts::{SIDECAR_BACKUP_ROUTE, SIDECAR_HEALTH_ROUTE, SIDECAR_STATE_ROUTE};
+use operator_api::registry::{DummyRegistry, HttpRegistry, K8sStsRegistry, Registry};
 use operator_api::{HeartbeatStatus, K8sXlineHandle, LocalXlineHandle};
 use tokio::sync::watch::{Receiver, Sender};
 use tokio::sync::{Mutex, RwLock};
@@ -16,7 +17,7 @@ use crate::backup::pv::Pv;
 use crate::backup::Provider;
 use crate::controller::Controller;
 use crate::routers;
-use crate::types::{BackendConfig, BackupConfig, Config, State, StatePayload};
+use crate::types::{BackendConfig, BackupConfig, Config, RegistryConfig, State, StatePayload};
 use crate::xline::XlineHandle;
 
 /// Sidecar
@@ -48,9 +49,20 @@ impl Sidecar {
             state: State::Start,
             revision,
         }));
+        let registry: Arc<dyn Registry + Send + Sync> = match self.config.registry.clone() {
+            None => Arc::new(DummyRegistry::new(self.config.init_member.members.clone())),
+            Some(RegistryConfig::Sts { name, namespace }) => Arc::new(
+                K8sStsRegistry::new_with_default(name, namespace, "cluster.local".to_owned()).await,
+            ),
+            Some(RegistryConfig::Http { server_addr }) => Arc::new(HttpRegistry::new(
+                server_addr,
+                self.config.cluster_name.clone(),
+            )),
+        };
 
         self.start_controller(
             Arc::clone(&handle),
+            Arc::clone(&registry),
             Arc::clone(&state),
             graceful_shutdown_event.subscribe(),
         );
@@ -59,7 +71,7 @@ impl Sidecar {
             Arc::clone(&state),
             graceful_shutdown_event.subscribe(),
         )?;
-        self.start_heartbeat(graceful_shutdown_event.subscribe());
+        self.start_heartbeat(registry, graceful_shutdown_event.subscribe())?;
 
         tokio::pin!(forceful_shutdown);
 
@@ -131,14 +143,24 @@ impl Sidecar {
     }
 
     /// Start heartbeat
-    fn start_heartbeat(&self, graceful_shutdown: Receiver<()>) {
+    fn start_heartbeat(
+        &self,
+        registry: Arc<dyn Registry + Send + Sync>,
+        graceful_shutdown: Receiver<()>,
+    ) -> Result<()> {
         let Some(monitor) = self.config.monitor.clone() else {
             info!("monitor did not set, disable heartbeat");
-            return;
+            return Ok(());
         };
         let cluster_name = self.config.cluster_name.clone();
         let name = self.config.name.clone();
-        let init_members = self.config.init_member.sidecar_members();
+        let self_host = self
+            .config
+            .init_member
+            .get_host(&name)
+            .ok_or_else(|| anyhow!("node name {} not found in initial members", &name))?
+            .clone();
+        let mut member_config = self.config.init_member.clone();
 
         #[allow(clippy::integer_arithmetic)] // this error originates in the macro `tokio::select`
         let _ig = tokio::spawn(async move {
@@ -150,10 +172,27 @@ impl Sidecar {
                 tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
                 loop {
                     let instant = tick.tick().await;
+
+                    let config = match registry
+                        .wait_full_fetch(name.clone(), self_host.clone())
+                        .await
+                    {
+                        Ok(c) => c,
+                        Err(err) => {
+                            error!("fetch config failed, error {err}");
+                            continue;
+                        }
+                    };
+                    member_config.members = config.members;
+
                     debug!("send heartbeat at {instant:?}");
-                    let status =
-                        HeartbeatStatus::gather(cluster_name.clone(), name.clone(), &init_members)
-                            .await;
+                    let status = HeartbeatStatus::gather(
+                        cluster_name.clone(),
+                        name.clone(),
+                        &member_config.sidecar_members(),
+                    )
+                    .await;
+
                     debug!("sidecar gathered status: {status:?}");
                     if let Err(e) = status.report(&monitor.monitor_addr).await {
                         error!("heartbeat report failed, error {e}");
@@ -168,12 +207,15 @@ impl Sidecar {
                 _ = heartbeat_task => {}
             }
         });
+
+        Ok(())
     }
 
     /// Start controller
     fn start_controller(
         &self,
         handle: Arc<RwLock<XlineHandle>>,
+        registry: Arc<dyn Registry + Sync + Send>,
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
     ) {
@@ -182,6 +224,7 @@ impl Sidecar {
             state,
             handle,
             self.config.reconcile_interval,
+            registry,
         );
         let init_member_config = self.config.init_member.clone();
         let _ig = tokio::spawn(async move {

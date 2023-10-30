@@ -2203,6 +2203,7 @@ dependencies = [
  "kube",
  "reqwest",
  "serde",
+ "tokio",
 ]
 
 [[package]]

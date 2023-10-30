@@ -146,7 +146,9 @@ use operator_api::consts::DEFAULT_DATA_DIR;
 use operator_api::XlineConfig;
 use tracing::debug;
 use xline_sidecar::sidecar::Sidecar;
-use xline_sidecar::types::{BackendConfig, BackupConfig, Config, MemberConfig, MonitorConfig};
+use xline_sidecar::types::{
+    BackendConfig, BackupConfig, Config, MemberConfig, MonitorConfig, RegistryConfig,
+};
 
 /// `DEFAULT_DATA_DIR` to String
 fn default_data_dir() -> String {
@@ -209,6 +211,12 @@ struct Cli {
     /// Heartbeat interval, it is enabled if --monitor_addr is set.
     #[arg(long, alias = "operator_heartbeat_interval", default_value = "10")]
     heartbeat_interval: u64,
+    /// Set registry to enable configuration discovery
+    /// e.g:
+    ///    sts:name:namespace           for k8s statefulset
+    ///    http:register_server_addr    for http registry
+    #[arg(long, value_parser = parse_registry)]
+    registry: Option<RegistryConfig>,
 }
 
 impl From<Cli> for Config {
@@ -236,6 +244,7 @@ impl From<Cli> for Config {
                 monitor_addr: addr,
                 heartbeat_interval: Duration::from_secs(value.heartbeat_interval),
             }),
+            registry: value.registry,
         }
     }
 }
@@ -328,6 +337,41 @@ fn parse_members(s: &str) -> Result<HashMap<String, String>, String> {
     Ok(map)
 }
 
+/// parse registry from string
+/// # Errors
+/// Return error when pass wrong args
+fn parse_registry(s: &str) -> Result<RegistryConfig, String> {
+    if s.is_empty() {
+        return Err("registry type is empty".to_owned());
+    }
+    let mut items: Vec<_> = s.split([':', ' ', ',', '-']).collect();
+    let kind = items.remove(0);
+    match kind {
+        "sts" => {
+            if items.len() != 2 {
+                return Err(format!(
+                    "sts registry type requires 2 argument, got {}",
+                    items.len()
+                ));
+            }
+            let name = items.remove(0).to_owned();
+            let namespace = items.remove(0).to_owned();
+            Ok(RegistryConfig::Sts { name, namespace })
+        }
+        "http" => {
+            if items.len() != 1 {
+                return Err(format!(
+                    "http registry type requires 1 argument, got {}",
+                    items.len()
+                ));
+            }
+            let server_addr = items.remove(0).to_owned();
+            Ok(RegistryConfig::Http { server_addr })
+        }
+        _ => Err(format!("unknown registry type: {kind}")),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -340,11 +384,11 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{parse_backend, parse_backup_type, parse_members, Cli};
+    use crate::{parse_backend, parse_backup_type, parse_members, parse_registry, Cli};
     use clap::Parser;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use xline_sidecar::types::{BackendConfig, BackupConfig};
+    use xline_sidecar::types::{BackendConfig, BackupConfig, RegistryConfig};
 
     fn full_parameter() -> Vec<&'static str> {
         vec![
@@ -371,6 +415,8 @@ mod test {
             "--operator-addr=xline-operator.svc.default.cluster.local:8080",
 
             "--heartbeat-interval=10",
+
+            "--registry=http:server_addr"
         ]
     }
 
@@ -488,6 +534,43 @@ mod test {
     }
 
     #[test]
+    fn test_parse_registry() {
+        let test_cases = [
+            (
+                "sts",
+                Err("sts registry type requires 2 argument, got 0".to_owned()),
+            ),
+            (
+                "http",
+                Err("http registry type requires 1 argument, got 0".to_owned()),
+            ),
+            ("", Err("registry type is empty".to_owned())),
+            (
+                "sts:sts_name",
+                Err("sts registry type requires 2 argument, got 1".to_owned()),
+            ),
+            (
+                "sts:sts_name:sts_namespace",
+                Ok(RegistryConfig::Sts {
+                    name: "sts_name".to_owned(),
+                    namespace: "sts_namespace".to_owned(),
+                }),
+            ),
+            (
+                "http:server_addr",
+                Ok(RegistryConfig::Http {
+                    server_addr: "server_addr".to_owned(),
+                }),
+            ),
+            ("unknown", Err("unknown registry type: unknown".to_owned())),
+        ];
+        for (input, expected) in test_cases {
+            let result = parse_registry(input);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
     fn test_parse_cli_should_success() {
         let cli = Cli::parse_from(full_parameter());
         assert_eq!(cli.name, "node1");
@@ -531,6 +614,12 @@ mod test {
                 container_name: "xline".to_owned(),
                 namespace: "default".to_owned(),
             }
+        );
+        assert_eq!(
+            cli.registry,
+            Some(RegistryConfig::Http {
+                server_addr: "server_addr".to_owned()
+            })
         );
     }
 }

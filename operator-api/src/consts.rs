@@ -4,6 +4,8 @@ pub const DEFAULT_BACKUP_DIR: &str = "/xline-backup";
 pub const DEFAULT_DATA_DIR: &str = "/usr/local/xline/data-dir";
 /// the URL ROUTE that sidecar sends heartbeat status to
 pub const OPERATOR_MONITOR_ROUTE: &str = "/monitor";
+/// the URL ROUTE that sidecar sends fetch config to
+pub const OPERATOR_REGISTRY_ROUTE: &str = "/registry";
 /// the URL ROUTE of each sidecar for backup
 pub const SIDECAR_BACKUP_ROUTE: &str = "/backup";
 /// the URL ROUTE of each sidecar member for health checking

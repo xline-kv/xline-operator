@@ -7,8 +7,6 @@ use k8s_openapi::api::core::v1::{Affinity, Container, PersistentVolumeClaim};
 use k8s_openapi::serde::{Deserialize, Serialize};
 use kube::CustomResource;
 use schemars::JsonSchema;
-use std::collections::HashMap;
-use std::net::IpAddr;
 
 /// Xline cluster specification
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema, Validate)]
@@ -110,9 +108,6 @@ pub struct ClusterStatus {
     /// The available nodes' number in the cluster
     #[garde(range(max = ctx.size))]
     pub available: usize,
-    /// The members registry
-    #[garde(skip)]
-    pub members: HashMap<String, IpAddr>,
 }
 
 #[cfg(test)]

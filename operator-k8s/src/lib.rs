@@ -149,6 +149,11 @@
     )
 )]
 
+use std::collections::HashMap;
+
+/// A sidecar cluster states map
+type SidecarClusterOwned<T> = HashMap<String, T>;
+
 /// Xline operator config
 pub mod config;
 /// Some constants
@@ -161,6 +166,8 @@ mod manager;
 mod monitor;
 /// Xline operator
 pub mod operator;
+/// HTTP server registry for sidecars to find each other
+mod registry;
 /// Xline operator web server router
 mod router;
 

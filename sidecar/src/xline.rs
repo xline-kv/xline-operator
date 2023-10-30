@@ -69,6 +69,8 @@ pub(crate) struct XlineHandle {
     is_healthy_retries: usize,
     /// The detailed xline process handle
     inner: Box<dyn operator_api::XlineHandle>,
+    /// The cached member status
+    cached_members: HashMap<String, String>,
 }
 
 impl XlineHandle {
@@ -96,6 +98,7 @@ impl XlineHandle {
             server_id: None,
             is_healthy_retries: 5,
             inner,
+            cached_members: HashMap::new(),
         })
     }
 
@@ -112,11 +115,46 @@ impl XlineHandle {
         Ok(())
     }
 
-    /// Update member update the client
+    /// Apply new members and clean the dead node in the cluster
     /// TODO: should xline client automatically discovery xlines?
-    pub(crate) async fn update_member(&mut self, xlines: &HashMap<String, String>) -> Result<()> {
+    pub(crate) async fn apply_members(&mut self, xlines: &HashMap<String, String>) -> Result<()> {
+        if &self.cached_members == xlines {
+            return Ok(());
+        }
+
+        let mut to_remove = vec![];
+        for name in self.cached_members.keys() {
+            if !xlines.contains_key(name) {
+                to_remove.push(name.clone());
+            }
+        }
+
         let new_client = Client::connect(xlines.values(), ClientOptions::default()).await?;
         _ = self.client.replace(new_client);
+        self.cached_members = xlines.clone();
+
+        if to_remove.is_empty() {
+            return Ok(());
+        }
+
+        // TODO: hold a distributed lock here.
+        let mut cluster_client = self.client().cluster_client();
+        let members: HashMap<String, _> = cluster_client
+            .member_list(MemberListRequest::new(true))
+            .await?
+            .members
+            .into_iter()
+            .map(|member| (member.name.clone(), member))
+            .collect();
+
+        for name in to_remove {
+            if let Some(member) = members.get(&name) {
+                let _ig = cluster_client
+                    .member_remove(MemberRemoveRequest::new(member.id))
+                    .await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -194,6 +232,7 @@ impl XlineHandle {
         debug!("xline server started, member: {:?}", member);
         _ = self.server_id.replace(member.id);
         _ = self.client.replace(client);
+        self.cached_members = xlines.clone();
         Ok(())
     }
 

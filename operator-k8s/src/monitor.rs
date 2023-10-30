@@ -12,6 +12,7 @@ use operator_api::HeartbeatStatus;
 use tracing::{debug, error};
 
 use crate::crd::Cluster;
+use crate::SidecarClusterOwned;
 
 /// Sidecar monitor context
 struct Context {
@@ -26,9 +27,6 @@ struct Context {
     /// Api for Pods
     pod_api: Api<Pod>,
 }
-
-/// A sidecar cluster states map
-type SidecarClusterOwned<T> = HashMap<String, T>;
 
 /// Sidecar monitor.
 /// It monitors the communication of all sidecars, finds and tries to recover the dropped sidecar.
@@ -65,7 +63,7 @@ impl SidecarMonitor {
 
     /// Run the state update task with graceful shutdown.
     /// Return fatal error if run failed.
-    /// The task that update the state received from sidecar operators
+    /// The task that update the state received from sidecars
     #[allow(clippy::integer_arithmetic)] // required by tokio::select
     pub(crate) async fn run_with_graceful_shutdown(
         self,
@@ -81,7 +79,7 @@ impl SidecarMonitor {
         }
     }
 
-    /// Inner task for state update, return the unrecoverable error
+    /// Task for state update, return the unrecoverable error
     async fn state_update(mut self) -> Result<()> {
         loop {
             let status = self.ctx.status_rx.recv_async().await?;

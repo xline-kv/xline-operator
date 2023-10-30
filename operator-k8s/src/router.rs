@@ -1,12 +1,20 @@
+use axum::extract::Query;
 use axum::{Extension, Json};
 use flume::Sender;
+use operator_api::registry::{Config, RegisterQuery};
 use operator_api::HeartbeatStatus;
-use prometheus::{Encoder, Registry};
+use prometheus::Encoder;
+use tokio::sync::Mutex;
 use tracing::error;
+
+use axum::http::StatusCode;
+use std::sync::Arc;
+
+use crate::registry::Registry;
 
 /// metrics handler
 #[allow(clippy::unused_async)] // require by axum
-pub(crate) async fn metrics(Extension(registry): Extension<Registry>) -> String {
+pub(crate) async fn metrics(Extension(registry): Extension<prometheus::Registry>) -> String {
     let mut buf1 = Vec::new();
     let encoder = prometheus::TextEncoder::new();
     let metric_families = registry.gather();
@@ -31,12 +39,29 @@ pub(crate) async fn healthz() -> &'static str {
 }
 
 /// sidecar monitor handler
-#[allow(clippy::unused_async)] // require by axum
 pub(crate) async fn sidecar_monitor(
     Extension(status_tx): Extension<Sender<HeartbeatStatus>>,
     Json(status): Json<HeartbeatStatus>,
 ) {
-    if let Err(e) = status_tx.send(status) {
+    if let Err(e) = status_tx.send_async(status).await {
         error!("channel send error: {e}");
     }
+}
+
+/// sidecar registry handler
+pub(crate) async fn sidecar_registry(
+    Query(RegisterQuery {
+        cluster,
+        name,
+        host,
+    }): Query<RegisterQuery>,
+    Extension(registry): Extension<Arc<Mutex<Registry>>>,
+) -> Result<Json<Config>, StatusCode> {
+    registry
+        .lock()
+        .await
+        .receive(cluster, name, host)
+        .await
+        .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)
+        .map(Json)
 }

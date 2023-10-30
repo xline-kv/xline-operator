@@ -23,11 +23,14 @@ pub struct Config {
     #[arg(long, default_value = "cluster.local")]
     pub cluster_suffix: String,
     /// Maximum interval between accepted `HeartbeatStatus`
-    #[arg(long, default_value = "2")]
+    #[arg(long, default_value = "5")]
     pub heartbeat_period: u64,
     /// Sidecar unreachable counter threshold
     #[arg(long, default_value = "4")]
     pub unreachable_thresh: usize,
+    /// Sidecar config time to live, in seconds. No longer than 300.
+    #[arg(long, default_value = "30")]
+    pub registry_ttl: u64,
 }
 
 /// The namespace to work, `ClusterWide` means work with all namespaces

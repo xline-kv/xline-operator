@@ -1,16 +1,17 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
-use axum::routing::any;
 use axum::routing::post;
+use axum::routing::{any, get};
 use axum::{Extension, Router};
 use futures::FutureExt;
 use k8s_openapi::api::core::v1::Pod;
 use kube::{Api, Client};
-use operator_api::consts::OPERATOR_MONITOR_ROUTE;
+use operator_api::consts::{OPERATOR_MONITOR_ROUTE, OPERATOR_REGISTRY_ROUTE};
 use operator_api::HeartbeatStatus;
-use prometheus::Registry;
 use tokio::sync::watch::{Receiver, Sender};
+use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
 use crate::config::{Config, Namespace};
@@ -18,7 +19,8 @@ use crate::controller::cluster::{ClusterController, ClusterMetrics};
 use crate::controller::{Controller, Metrics};
 use crate::crd::Cluster;
 use crate::monitor::SidecarMonitor;
-use crate::router::{healthz, metrics, sidecar_monitor};
+use crate::registry::Registry;
+use crate::router::{healthz, metrics, sidecar_monitor, sidecar_registry};
 
 /// Xline Operator for k8s
 #[derive(Debug)]
@@ -61,7 +63,7 @@ impl Operator {
         let (graceful_shutdown_event, _) = tokio::sync::watch::channel(());
         let forceful_shutdown = self.forceful_shutdown(&graceful_shutdown_event);
         let (status_tx, status_rx) = flume::unbounded();
-        let registry = Registry::new();
+        let registry = prometheus::Registry::new();
 
         self.start_sidecar_monitor(
             status_rx,
@@ -71,11 +73,16 @@ impl Operator {
         );
         self.start_controller(
             kube_client,
-            cluster_api,
+            cluster_api.clone(),
             &registry,
             graceful_shutdown_event.subscribe(),
         )?;
-        self.start_web_server(status_tx, registry, graceful_shutdown_event.subscribe())?;
+        self.start_web_server(
+            status_tx,
+            cluster_api,
+            registry,
+            graceful_shutdown_event.subscribe(),
+        )?;
 
         tokio::pin!(forceful_shutdown);
 
@@ -108,7 +115,7 @@ impl Operator {
         &self,
         kube_client: Client,
         cluster_api: Api<Cluster>,
-        registry: &Registry,
+        registry: &prometheus::Registry,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
         let metrics = ClusterMetrics::new();
@@ -178,15 +185,21 @@ impl Operator {
     fn start_web_server(
         &self,
         status_tx: flume::Sender<HeartbeatStatus>,
-        registry: Registry,
+        cluster_api: Api<Cluster>,
+        metrics_registry: prometheus::Registry,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
         let status = Router::new()
             .route(OPERATOR_MONITOR_ROUTE, post(sidecar_monitor))
+            .route(OPERATOR_REGISTRY_ROUTE, get(sidecar_registry))
             .route("/metrics", any(metrics))
             .route("/healthz", any(healthz))
             .layer(Extension(status_tx))
-            .layer(Extension(registry));
+            .layer(Extension(metrics_registry))
+            .layer(Extension(Arc::new(Mutex::new(Registry::new(
+                Duration::from_secs(self.config.registry_ttl),
+                cluster_api,
+            )))));
         let server = axum::Server::bind(&self.config.listen_addr.parse()?);
 
         let _ig = tokio::spawn(async move {

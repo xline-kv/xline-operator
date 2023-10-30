@@ -24,11 +24,12 @@ pub struct Config {
     pub xline: XlineConfig,
     /// The backend to run xline
     pub backend: BackendConfig,
-    /// The sidecar monitor (operator) config, set to enable
-    /// heartbeat and configuration discovery
+    /// The sidecar monitor (operator) config, set to enable heartbeat
     pub monitor: Option<MonitorConfig>,
     /// Backup storage config
     pub backup: Option<BackupConfig>,
+    /// The sidecar registry config, set to enable configuration discovery
+    pub registry: Option<RegistryConfig>,
 }
 
 /// Monitor(Operator) config
@@ -39,6 +40,24 @@ pub struct MonitorConfig {
     pub monitor_addr: String,
     /// heartbeat interval
     pub heartbeat_interval: Duration,
+}
+
+/// Registry config
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum RegistryConfig {
+    /// Statefulset mode
+    Sts {
+        /// Statefulset name
+        name: String,
+        /// Statefulset namespace
+        namespace: String,
+    },
+    /// Http mode
+    Http {
+        /// Http server address
+        server_addr: String,
+    },
 }
 
 /// Member config
@@ -106,9 +125,13 @@ impl MemberConfig {
     }
 
     /// Get the majority count
-
     pub(crate) fn majority_cnt(&self) -> usize {
         self.members.len().div(2).add(1)
+    }
+
+    /// Get the host
+    pub(crate) fn get_host(&self, name: &str) -> Option<&String> {
+        self.members.get(name)
     }
 }
 
