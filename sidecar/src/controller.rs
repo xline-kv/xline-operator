@@ -7,12 +7,14 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use operator_api::registry::Registry;
+use prometheus::{Histogram, HistogramOpts, IntCounter, IntCounterVec, Opts};
 use tokio::select;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{debug, error, info};
 
 use crate::types::{MemberConfig, State, StatePayload, StateStatus};
+use crate::utils::exponential_time_bucket;
 use crate::xline::XlineHandle;
 
 /// Sidecar operator controller
@@ -25,8 +27,66 @@ pub(crate) struct Controller {
     handle: Arc<RwLock<XlineHandle>>,
     /// Check interval
     reconcile_interval: Duration,
+    /// Controller metrics
+    metrics: ControllerMetrics,
     /// Configuration Registry
     registry: Arc<dyn Registry + Sync + Send>,
+}
+
+/// Controller metrics
+pub(crate) struct ControllerMetrics {
+    /// Reconcile duration histogram
+    reconcile_duration: Histogram,
+    /// Reconcile failed count
+    reconcile_failed_count: IntCounterVec,
+    /// Xline restart count
+    restart_count: IntCounter,
+    /// Seed cluster count
+    seed_count: IntCounter,
+}
+
+impl ControllerMetrics {
+    /// New a controller metrics
+    #[allow(clippy::expect_used)]
+    pub(crate) fn new() -> Self {
+        Self {
+            reconcile_duration: Histogram::with_opts(
+                HistogramOpts::new(
+                    "sidecar_reconcile_duration_seconds",
+                    "Duration of sidecar reconcile loop in seconds",
+                )
+                .buckets(exponential_time_bucket(0.1, 2.0, 10)),
+            )
+            .expect("failed to create sidecar_reconcile_duration_seconds histogram"),
+            reconcile_failed_count: IntCounterVec::new(
+                Opts::new(
+                    "sidecar_reconcile_failed_count",
+                    "Number of failed times the sidecar reconcile loop has run",
+                ),
+                &["reason"],
+            )
+            .expect("failed to create sidecar_reconcile_failed_count counter"),
+            restart_count: IntCounter::new(
+                "sidecar_restart_xline_count",
+                "Number of how many times the xline restarts by this sidecar",
+            )
+            .expect("failed to create sidecar_restart_xline_count counter"),
+            seed_count: IntCounter::new(
+                "sidecar_seed_count",
+                "Number of how many times the sidecar seeds the cluster",
+            )
+            .expect("failed to create sidecar_seed_count counter"),
+        }
+    }
+
+    /// Register the metrics into registry
+    pub(crate) fn register(&self, registry: &prometheus::Registry) -> Result<()> {
+        registry.register(Box::new(self.reconcile_duration.clone()))?;
+        registry.register(Box::new(self.reconcile_failed_count.clone()))?;
+        registry.register(Box::new(self.restart_count.clone()))?;
+        registry.register(Box::new(self.seed_count.clone()))?;
+        Ok(())
+    }
 }
 
 impl Debug for Controller {
@@ -46,6 +106,7 @@ impl Controller {
         state: Arc<Mutex<StatePayload>>,
         handle: Arc<RwLock<XlineHandle>>,
         reconcile_interval: Duration,
+        metrics: ControllerMetrics,
         registry: Arc<dyn Registry + Sync + Send>,
     ) -> Self {
         Self {
@@ -53,6 +114,7 @@ impl Controller {
             state,
             handle,
             reconcile_interval,
+            metrics,
             registry,
         }
     }
@@ -92,6 +154,7 @@ impl Controller {
             ..init_member_config
         };
 
+        self.metrics.restart_count.inc();
         self.handle
             .write()
             .await
@@ -99,6 +162,7 @@ impl Controller {
             .await?;
 
         loop {
+            let timer = self.metrics.reconcile_duration.start_timer();
             let instant = tick.tick().await;
 
             let config = match self
@@ -116,12 +180,17 @@ impl Controller {
 
             if let Err(err) = self.reconcile_once(&member_config).await {
                 error!("reconcile failed, error: {err}");
+                self.metrics
+                    .reconcile_failed_count
+                    .with_label_values(&[&err.to_string()])
+                    .inc();
                 continue;
             }
             debug!(
                 "successfully reconcile the cluster states within {:?}",
                 instant.elapsed()
             );
+            drop(timer);
         }
     }
 
@@ -149,6 +218,7 @@ impl Controller {
             (true, false) => {
                 self.set_state(State::Pending).await;
 
+                self.metrics.restart_count.inc();
                 info!("status: cluster healthy + xline not running, joining the cluster");
                 handle.start(&xline_members).await?;
             }
@@ -191,6 +261,8 @@ impl Controller {
                     info!(
                         "status: cluster unhealthy + xline not running + all start + seeder, seed cluster"
                     );
+                    self.metrics.restart_count.inc();
+                    self.metrics.seed_count.inc();
                     handle.start(&xline_members).await?;
                 }
             }

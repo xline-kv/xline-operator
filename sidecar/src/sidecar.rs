@@ -2,12 +2,13 @@ use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use axum::routing::{get, post};
+use axum::routing::{any, get, post};
 use axum::{Extension, Router};
 use futures::{FutureExt, TryFutureExt};
 use operator_api::consts::{SIDECAR_BACKUP_ROUTE, SIDECAR_HEALTH_ROUTE, SIDECAR_STATE_ROUTE};
 use operator_api::registry::{DummyRegistry, HttpRegistry, K8sStsRegistry, Registry};
 use operator_api::{HeartbeatStatus, K8sXlineHandle, LocalXlineHandle};
+use prometheus::{Histogram, HistogramOpts};
 use tokio::sync::watch::{Receiver, Sender};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, MissedTickBehavior};
@@ -15,9 +16,10 @@ use tracing::{debug, error, info, warn};
 
 use crate::backup::pv::Pv;
 use crate::backup::Provider;
-use crate::controller::Controller;
+use crate::controller::{Controller, ControllerMetrics};
 use crate::routers;
 use crate::types::{BackendConfig, BackupConfig, Config, RegistryConfig, State, StatePayload};
+use crate::utils::exponential_time_bucket;
 use crate::xline::XlineHandle;
 
 /// Sidecar
@@ -59,19 +61,26 @@ impl Sidecar {
                 self.config.cluster_name.clone(),
             )),
         };
+        let metrics_registry = prometheus::Registry::new();
 
         self.start_controller(
             Arc::clone(&handle),
+            &metrics_registry,
             Arc::clone(&registry),
             Arc::clone(&state),
             graceful_shutdown_event.subscribe(),
-        );
+        )?;
+        self.start_heartbeat(
+            &metrics_registry,
+            registry,
+            graceful_shutdown_event.subscribe(),
+        )?;
         self.start_web_server(
             Arc::clone(&handle),
             Arc::clone(&state),
+            metrics_registry,
             graceful_shutdown_event.subscribe(),
         )?;
-        self.start_heartbeat(registry, graceful_shutdown_event.subscribe())?;
 
         tokio::pin!(forceful_shutdown);
 
@@ -145,9 +154,18 @@ impl Sidecar {
     /// Start heartbeat
     fn start_heartbeat(
         &self,
+        metrics_registry: &prometheus::Registry,
         registry: Arc<dyn Registry + Send + Sync>,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
+        let heartbeat_histogram = Histogram::with_opts(
+            HistogramOpts::new(
+                "sidecar_heartbeat_duration_histogram",
+                "Duration of sidecar heartbeat loop in seconds",
+            )
+            .buckets(exponential_time_bucket(0.1, 2.0, 10)),
+        )?;
+        metrics_registry.register(Box::new(heartbeat_histogram.clone()))?;
         let Some(monitor) = self.config.monitor.clone() else {
             info!("monitor did not set, disable heartbeat");
             return Ok(());
@@ -171,6 +189,7 @@ impl Sidecar {
                 // ensure a fixed heartbeat interval
                 tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
                 loop {
+                    let timer = heartbeat_histogram.start_timer();
                     let instant = tick.tick().await;
 
                     let config = match registry
@@ -197,6 +216,7 @@ impl Sidecar {
                     if let Err(e) = status.report(&monitor.monitor_addr).await {
                         error!("heartbeat report failed, error {e}");
                     }
+                    drop(timer);
                 }
             };
 
@@ -215,15 +235,19 @@ impl Sidecar {
     fn start_controller(
         &self,
         handle: Arc<RwLock<XlineHandle>>,
+        metrics_registry: &prometheus::Registry,
         registry: Arc<dyn Registry + Sync + Send>,
         state: Arc<Mutex<StatePayload>>,
         graceful_shutdown: Receiver<()>,
-    ) {
+    ) -> Result<()> {
+        let metrics = ControllerMetrics::new();
+        metrics.register(metrics_registry)?;
         let controller = Controller::new(
             self.config.name.clone(),
             state,
             handle,
             self.config.reconcile_interval,
+            metrics,
             registry,
         );
         let init_member_config = self.config.init_member.clone();
@@ -238,6 +262,7 @@ impl Sidecar {
                 info!("controller shutdown");
             }
         });
+        Ok(())
     }
 
     /// Run a web server to expose current state to other sidecar operators and k8s
@@ -245,6 +270,7 @@ impl Sidecar {
         &self,
         handle: Arc<RwLock<XlineHandle>>,
         state: Arc<Mutex<StatePayload>>,
+        metrics_registry: prometheus::Registry,
         graceful_shutdown: Receiver<()>,
     ) -> Result<()> {
         let members = self.config.init_member.sidecar_members();
@@ -260,8 +286,10 @@ impl Sidecar {
             .route(SIDECAR_HEALTH_ROUTE, get(routers::health))
             .route(SIDECAR_BACKUP_ROUTE, get(routers::backup))
             .route(SIDECAR_STATE_ROUTE, get(routers::state))
+            .route("/metrics", any(routers::metrics))
             .route("/membership", post(routers::membership))
             .layer(Extension(handle))
+            .layer(Extension(metrics_registry))
             .layer(Extension(state));
 
         debug!("web server listen addr: {addr}");

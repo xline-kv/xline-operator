@@ -1,6 +1,9 @@
 use std::fs::{read_to_string, remove_file, write};
+use std::iter::repeat;
+use std::ops::Mul;
 use std::path::Path;
 
+use clippy_utilities::NumericCast;
 use operator_api::consts::{DEFAULT_BACKUP_DIR, DEFAULT_DATA_DIR};
 
 /// Check if the volume under the path is working fine
@@ -48,6 +51,16 @@ pub(crate) fn check_backup_volume() -> bool {
         return true;
     }
     check_volume(backup_volume)
+}
+
+/// Returns a vector of time buckets for the reconcile duration histogram.
+#[allow(clippy::as_conversions)] // count will not too large
+pub(crate) fn exponential_time_bucket(start: f64, factor: f64, count: usize) -> Vec<f64> {
+    repeat(factor)
+        .enumerate()
+        .take(count)
+        .map(|(i, f)| start.mul(f.powi(i.numeric_cast())))
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]

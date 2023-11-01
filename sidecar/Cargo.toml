@@ -17,9 +17,11 @@ async-trait = "0.1.68"
 axum = "0.6.18"
 bytes = "1.4.0"
 clap = { version = "4.3.4", features = ["derive"] }
+clippy-utilities = "0.2.0"
 engine = { git = "https://github.com/xline-kv/Xline.git", package = "engine" }
 futures = "0.3.28"
 operator-api = { path = "../operator-api" }
+prometheus = "0.13.3"
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0.130", features = ["derive"] }
 tokio = { version = "1.0", features = [
