@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "operator-api",
-    "operator-k8s",
-    "sidecar",
-]
