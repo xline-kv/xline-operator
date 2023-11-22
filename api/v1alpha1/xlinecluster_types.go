@@ -17,31 +17,16 @@ limitations under the License.
 package v1alpha1
 
 import (
+	appv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// XlineClusterSpec defines the desired state of XlineCluster
-type XlineClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of XlineCluster. Edit xlinecluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
-}
-
-// XlineClusterStatus defines the observed state of XlineCluster
-type XlineClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
 // XlineCluster is the Schema for the xlineclusters API
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=xc
+
 type XlineCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -50,14 +35,54 @@ type XlineCluster struct {
 	Status XlineClusterStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-
 // XlineClusterList contains a list of XlineCluster
+// +kubebuilder:object:root=true
 type XlineClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []XlineCluster `json:"items"`
 }
+
+// ########################################
+//   		XlineClusterSpec
+// ########################################
+
+// XlineClusterSpec defines the desired state of XlineCluster
+// +k8s:openapi-gen=true
+type XlineClusterSpec struct {
+	// Xline cluster image version
+	Version string `json:"version"`
+
+	// Xline cluster image
+	Image *string `json:"image,omitempty"`
+
+	// ImagePullPolicy of Xline cluster Pods
+	// +optional
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
+	// The replicas of xline nodes
+	// +kubebuilder:validation:Minimum=3
+	Replicas uint32 `json:"replicas"`
+}
+
+// XlineClusterStatus defines the observed state of XlineCluster
+type XlineClusterStatus struct {
+	LastApplySpecHash *string                      `json:"lastApplySpecHash,omitempty"`
+	Image             string                       `json:"image,omitempty"`
+	StatefulSetRef    NamespacedName               `json:"statefulSetRef,omitempty"`
+	Members           []string                     `json:"members,omitempty"`
+	ReadyMembers      []string                     `json:"readyMembers,omitempty"`
+	Conditions        []appv1.StatefulSetCondition `json:"conditions,omitempty"`
+}
+
+// XlineClusterOprStage represents XlineCluster operator stage
+type XlineClusterOprStage string
+
+const (
+	StageService     XlineClusterOprStage = "Service"
+	StageStatefulSet XlineClusterOprStage = "Statefulset"
+	StageComplete    XlineClusterOprStage = "complete"
+)
 
 func init() {
 	SchemeBuilder.Register(&XlineCluster{}, &XlineClusterList{})
