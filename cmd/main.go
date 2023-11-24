@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	xlinekvstoredatenlordcomv1alpha1 "github.com/xline-kv/xline-operator/api/v1alpha1"
+	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
 	"github.com/xline-kv/xline-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
@@ -45,7 +45,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(xlinekvstoredatenlordcomv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(xapi.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
