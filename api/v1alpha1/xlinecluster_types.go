@@ -20,6 +20,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // XlineCluster is the Schema for the xlineclusters API
@@ -31,8 +32,9 @@ type XlineCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   XlineClusterSpec   `json:"spec,omitempty"`
-	Status XlineClusterStatus `json:"status,omitempty"`
+	Spec   XlineClusterSpec      `json:"spec,omitempty"`
+	Status XlineClusterStatus    `json:"status,omitempty"`
+	objKey *types.NamespacedName `json:"-"`
 }
 
 // XlineClusterList contains a list of XlineCluster
@@ -62,27 +64,37 @@ type XlineClusterSpec struct {
 
 	// The replicas of xline nodes
 	// +kubebuilder:validation:Minimum=3
-	Replicas uint32 `json:"replicas"`
+	Replicas int32 `json:"replicas"`
 }
 
 // XlineClusterStatus defines the observed state of XlineCluster
 type XlineClusterStatus struct {
-	LastApplySpecHash *string                      `json:"lastApplySpecHash,omitempty"`
-	Image             string                       `json:"image,omitempty"`
-	StatefulSetRef    NamespacedName               `json:"statefulSetRef,omitempty"`
-	Members           []string                     `json:"members,omitempty"`
-	ReadyMembers      []string                     `json:"readyMembers,omitempty"`
-	Conditions        []appv1.StatefulSetCondition `json:"conditions,omitempty"`
+	LastApplySpecHash      *string `json:"lastApplySpecHash,omitempty"`
+	XlineClusterRecStatus  `json:",inline"`
+	XlineClusterSyncStatus `json:",inline"`
 }
 
 // XlineClusterOprStage represents XlineCluster operator stage
 type XlineClusterOprStage string
 
 const (
-	StageService     XlineClusterOprStage = "Service"
-	StageStatefulSet XlineClusterOprStage = "Statefulset"
-	StageComplete    XlineClusterOprStage = "complete"
+	StageXlineService     XlineClusterOprStage = "Xline/Service"
+	StageXlineStatefulSet XlineClusterOprStage = "Xline/Statefulset"
+	StageComplete         XlineClusterOprStage = "complete"
 )
+
+type XlineClusterRecStatus struct {
+	Stage       XlineClusterOprStage `json:"stage,omitempty"`
+	StageStatus OprStageStatus       `json:"stageStatus,omitempty"`
+	LastMessage string               `json:"lastMessage,omitempty"`
+}
+
+type XlineClusterSyncStatus struct {
+	Image          string                       `json:"image,omitempty"`
+	StatefulSetRef NamespacedName               `json:"statefulSetRef,omitempty"`
+	ServiceRef     NamespacedName               `json:"serviceRef,omitempty"`
+	Conditions     []appv1.StatefulSetCondition `json:"conditions,omitempty"`
+}
 
 func init() {
 	SchemeBuilder.Register(&XlineCluster{}, &XlineClusterList{})

@@ -31,3 +31,29 @@ func NewNamespacedName(name types.NamespacedName) NamespacedName {
 		Namespace: name.Namespace,
 	}
 }
+
+// OprStageAction represents the action type of controller reconcile stage
+type OprStageAction string
+
+const (
+	StageActionApply  OprStageAction = "apply"
+	StageActionDelete OprStageAction = "delete"
+)
+
+// OprStageStatus represents the status of controller stage
+type OprStageStatus string
+
+const (
+	StageResultSucceeded OprStageStatus = "succeeded"
+	StageResultFailed    OprStageStatus = "failed"
+)
+
+func (e *XlineCluster) ObjKey() types.NamespacedName {
+	if e.objKey == nil {
+		key := types.NamespacedName{Namespace: e.Namespace, Name: e.Name}
+		e.objKey = &key
+		return key
+	} else {
+		return *e.objKey
+	}
+}
