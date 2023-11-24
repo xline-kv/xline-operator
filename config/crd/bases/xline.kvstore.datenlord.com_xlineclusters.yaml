@@ -88,14 +88,24 @@ spec:
                 type: string
               lastApplySpecHash:
                 type: string
-              members:
-                items:
-                  type: string
-                type: array
-              readyMembers:
-                items:
-                  type: string
-                type: array
+              lastMessage:
+                type: string
+              serviceRef:
+                description: NamespacedName is the name and namespace of the kubernetes
+                  object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
+              stage:
+                description: XlineClusterOprStage represents XlineCluster operator
+                  stage
+                type: string
+              stageStatus:
+                description: OprStageStatus represents the status of controller stage
+                type: string
               statefulSetRef:
                 description: NamespacedName is the name and namespace of the kubernetes
                   object
