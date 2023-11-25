@@ -9,7 +9,6 @@ repos:
       - id: check-merge-conflict
       - id: check-symlinks
       - id: check-yaml
-      - id: check-toml
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: trailing-whitespace
@@ -21,36 +20,14 @@ repos:
     rev: v1.16.0
     hooks:
       - id: typos
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-imports
+      - id: go-mod-tidy
   - repo: local
     hooks:
-      - id: cargo-fmt
-        name: cargo fmt
-        description: Format files with rustfmt.
-        entry: bash -c 'cargo fmt -- --check'
-        language: rust
-        files: ^(?!abi)\.rs$
-        args: [ ]
-      - id: cargo-check
-        name: cargo check
-        description: Check the package for errors.
-        entry: bash -c 'cargo check --all'
-        language: rust
-        files: \.rs$
-        pass_filenames: false
-      - id: cargo-clippy
-        name: cargo clippy
-        description: Lint rust sources
-        entry: bash -c 'cargo clippy --all-targets --all-features --tests --benches -- -D warnings'
-        language: rust
-        files: \.rs$
-        pass_filenames: false
-      - id: cargo-test
-        name: cargo test
-        description: unit test for the project
-        entry: bash -c 'cargo test --all-features --all --lib'
-        language: rust
-        files: \.rs$
-        pass_filenames: false
       - id: conventional-commit-msg-validation
         name: commit message conventional validation
         language: pygrep
