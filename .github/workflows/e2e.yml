@@ -1,0 +1,39 @@
+name: E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: { }
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.actor }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  KIND_VERSION: v0.20.0
+  GO_VERSION: '1.21.3'
+
+jobs:
+  validation:
+    name: 'Validation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: 'Install Kind'
+        run: |
+          wget https://github.com/kubernetes-sigs/kind/releases/download/${{ env.KIND_VERSION }}/kind-linux-amd64
+          chmod +x kind-linux-amd64
+          mv kind-linux-amd64 /usr/local/bin/kind
+      - name: 'E2E CI'
+        env:
+          KIND_CLUSTER_IMAGE: kindest/node:v1.27.3
+        run: bash ./tests/e2e/e2e.sh -p ci
+      - name: clean
+        if: failure()
+        run: bash ./tests/e2e/e2e.sh -c
