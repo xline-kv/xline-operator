@@ -1,0 +1,9 @@
+apiVersion: xline.io.datenlord.com/v1alpha1
+kind: XlineCluster
+metadata:
+  name: my-xline-cluster
+spec:
+  # TODO: Replace this image repo with ghcr.io when Xline 0.6.1 is ready
+  image: phoenix500526/xline:v0.6.1
+  imagePullPolicy: IfNotPresent
+  replicas: 3
