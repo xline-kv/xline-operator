@@ -60,7 +60,6 @@ func (r *ClusterStageRecResult) AsXlineClusterRecStatus() xapi.XlineClusterRecSt
 	res := xapi.XlineClusterRecStatus{
 		Stage:       r.Stage,
 		StageStatus: r.Status,
-		StageAction: r.Action,
 	}
 	if r.Err != nil {
 		res.LastMessage = r.Err.Error()
