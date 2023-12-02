@@ -27,7 +27,6 @@ func (r *XlineClusterReconciler) syncXlineStatus(xlineStatus *xapi.XlineClusterS
 	}
 
 	stsRef := tran.GetStatefulSetKey(r.CR.ObjKey())
-	// collect members status via ref statefulset
 	sts := &appv1.StatefulSet{}
 	exist, err = r.Exist(stsRef, sts)
 	if err != nil {
