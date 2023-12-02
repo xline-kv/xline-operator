@@ -68,7 +68,7 @@ function test::ci::_start() {
   log::info "controller started"
   popd
   log::info "starting xline cluster"
-  k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yml" >/dev/null 2>&1
+  k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
 }
 
