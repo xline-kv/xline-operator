@@ -43,7 +43,6 @@ func xlineNamespaceName(name string, ns string) types.NamespacedName {
 // +kubebuilder:docs-gen:collapse=Imports
 
 var _ = Describe("XlineCluster controller", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		XlineClusterName      = "test-xline-cluster"
@@ -118,5 +117,4 @@ var _ = Describe("XlineCluster controller", func() {
 			}, timeout, interval).Should(Equal(expected_status))
 		})
 	})
-
 })
