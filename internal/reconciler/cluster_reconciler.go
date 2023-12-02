@@ -35,16 +35,15 @@ type XlineClusterReconciler struct {
 type ClusterStageRecResult struct {
 	Stage  xapi.XlineClusterOprStage
 	Status xapi.OprStageStatus
-	Action xapi.OprStageAction
 	Err    error
 }
 
-func clusterStageSucc(stage xapi.XlineClusterOprStage, action xapi.OprStageAction) ClusterStageRecResult {
-	return ClusterStageRecResult{Stage: stage, Status: xapi.StageResultSucceeded, Action: action}
+func clusterStageSucc(stage xapi.XlineClusterOprStage) ClusterStageRecResult {
+	return ClusterStageRecResult{Stage: stage, Status: xapi.StageResultSucceeded}
 }
 
-func clusterStageFail(stage xapi.XlineClusterOprStage, action xapi.OprStageAction, err error) ClusterStageRecResult {
-	return ClusterStageRecResult{Stage: stage, Status: xapi.StageResultFailed, Action: action, Err: err}
+func clusterStageFail(stage xapi.XlineClusterOprStage, err error) ClusterStageRecResult {
+	return ClusterStageRecResult{Stage: stage, Status: xapi.StageResultFailed, Err: err}
 }
 
 // Reconcile all sub components
@@ -69,18 +68,16 @@ func (r *ClusterStageRecResult) AsXlineClusterRecStatus() xapi.XlineClusterRecSt
 
 // reconcile xline cluster resources.
 func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
-	action := xapi.StageActionApply
-
 	// create a xline service
 	service := tran.MakeService(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(service, &corev1.Service{}); err != nil {
-		return clusterStageFail(xapi.StageXlineService, action, err)
+		return clusterStageFail(xapi.StageXlineService, err)
 	}
 	// create a xline statefulset
 	statefulSet := tran.MakeStatefulSet(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(statefulSet, &appv1.StatefulSet{}); err != nil {
-		return clusterStageFail(xapi.StageXlineStatefulSet, action, err)
+		return clusterStageFail(xapi.StageXlineStatefulSet, err)
 	}
-	return clusterStageSucc(xapi.StageComplete, action)
+	return clusterStageSucc(xapi.StageComplete)
 
 }
