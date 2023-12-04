@@ -101,7 +101,7 @@ function test::ci::_chaos() {
     done
     test::ci::_etcdctl_expect "$endpoints" "put B $i" "OK" || return $?
     test::ci::_etcdctl_expect "$endpoints" "get B" "B\n$i" || return $?
-    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
+    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts/$_TEST_CI_STS_NAME --timeout=300s >/dev/null 2>&1
     log::info "wait for log synchronization" && sleep $_TEST_CI_LOG_SYNC_TIMEOUT
   done
 }

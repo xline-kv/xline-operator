@@ -35,6 +35,11 @@ spec:
           spec:
             description: XlineClusterSpec defines the desired state of XlineCluster
             properties:
+              config:
+                additionalProperties:
+                  type: string
+                description: The config items of xline server
+                type: object
               image:
                 description: Xline cluster image
                 type: string

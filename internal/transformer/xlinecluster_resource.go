@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
+	"github.com/xline-kv/xline-operator/internal/util"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
+
+func GetConfigMapKey(xlineClusterName types.NamespacedName) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: xlineClusterName.Namespace,
+		Name:      fmt.Sprintf("%s-config", xlineClusterName.Name),
+	}
+}
 
 func GetServiceKey(xlineClusterName types.NamespacedName) types.NamespacedName {
 	return types.NamespacedName{
@@ -46,6 +54,33 @@ func GetMemberTopology(stsRef types.NamespacedName, svcName string, replicas int
 	return strings.Join(members, ",")
 }
 
+func defaultConfigMap(clusterName string) map[string]string {
+	return map[string]string{
+		"init-leader": fmt.Sprintf("%s-sts-0", clusterName),
+		"log-level":   "info",
+		"engine":      "rocksdb",
+		"data-dir":    "/usr/local/xline/data-dir",
+		"jwt-pubkey":  "",
+		"jwt-prikey":  "",
+	}
+}
+
+func MakeConfigMap(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.ConfigMap {
+	defaultConf := defaultConfigMap(cr.ObjKey().Name)
+	data := util.IntersectAndMergeMaps(cr.Spec.Config, defaultConf)
+	configMapRef := GetConfigMapKey(cr.ObjKey())
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapRef.Name,
+			Namespace: configMapRef.Namespace,
+			Labels:    GetXlineInstanceLabels(cr.ObjKey()),
+		},
+		Data: data,
+	}
+	_ = controllerutil.SetOwnerReference(cr, configMap, scheme)
+	return configMap
+}
+
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
 	svcRef := GetServiceKey(cr.ObjKey())
 	svcLabel := GetXlineInstanceLabels(cr.ObjKey())
@@ -71,6 +106,7 @@ func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service 
 
 func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.StatefulSet {
 	crName := types.NamespacedName{Namespace: cr.Namespace, Name: cr.Name}
+	configMapRef := GetConfigMapKey(cr.ObjKey())
 	stsRef := GetStatefulSetKey(crName)
 	stsLabels := GetXlineInstanceLabels(crName)
 	svcName := GetServiceKey(cr.ObjKey()).Name
@@ -85,6 +121,12 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		},
 		Env: []corev1.EnvVar{
 			{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
+			{Name: "INIT_LEADER", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "init-leader")},
+			{Name: "RUST_LOG", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "log-level")},
+			{Name: "ENGINE", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "engine")},
+			{Name: "DATA_DIR", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "data-dir")},
+			{Name: "AUTH_PUBLIC_KEY", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "jwt-pubkey")},
+			{Name: "AUTH_PRIVATE_KEY", ValueFrom: util.NewEnvVarConfigMapSource(configMapRef.Name, "jwt-prikey")},
 		},
 	}
 

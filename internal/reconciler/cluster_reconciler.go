@@ -68,6 +68,12 @@ func (r *ClusterStageRecResult) AsXlineClusterRecStatus() xapi.XlineClusterRecSt
 
 // reconcile xline cluster resources.
 func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
+	// create an xline configmap
+	configMap := tran.MakeConfigMap(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(configMap, &corev1.ConfigMap{}); err != nil {
+		return clusterStageFail(xapi.StageXlineConfigMap, err)
+	}
+
 	// create a xline service
 	service := tran.MakeService(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(service, &corev1.Service{}); err != nil {

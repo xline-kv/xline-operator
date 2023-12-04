@@ -65,6 +65,10 @@ type XlineClusterSpec struct {
 	// The replicas of xline nodes
 	// +kubebuilder:validation:Minimum=3
 	Replicas int32 `json:"replicas"`
+
+	// The config items of xline server
+	// +optional
+	Config map[string]string `json:"config"`
 }
 
 // XlineClusterStatus defines the observed state of XlineCluster
@@ -78,6 +82,7 @@ type XlineClusterStatus struct {
 type XlineClusterOprStage string
 
 const (
+	StageXlineConfigMap   XlineClusterOprStage = "Xline/ConfigMap"
 	StageXlineService     XlineClusterOprStage = "Xline/Service"
 	StageXlineStatefulSet XlineClusterOprStage = "Xline/Statefulset"
 	StageComplete         XlineClusterOprStage = "complete"
