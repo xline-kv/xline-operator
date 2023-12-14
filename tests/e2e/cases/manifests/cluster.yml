@@ -3,7 +3,7 @@ kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
-  version: v0.6.0
+  version: v0.6.1
   image: phoenix500526/xline
   imagePullPolicy: IfNotPresent
   replicas: 3

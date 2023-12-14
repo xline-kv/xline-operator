@@ -34,7 +34,7 @@ function test::ci::_etcdctl_expect() {
 }
 
 function test::ci::_install_CRD() {
-    KUBECTL="minikube kubectl --" make install
+    make install
     if [ $? -eq 0 ]; then
         log::info "make install: create custom resource definition succeeded"
     else
@@ -43,7 +43,7 @@ function test::ci::_install_CRD() {
 }
 
 function test::ci::_uninstall_CRD() {
-    KUBECTL="minikube kubectl --" make uninstall
+    make uninstall
     if [ $? -eq 0 ]; then
         log::info "make uninstall: remove custom resource definition succeeded"
     else
@@ -64,7 +64,7 @@ function test::ci::_start() {
   log::info "starting controller"
   pushd $(dirname "${BASH_SOURCE[0]}")/../../../
   test::ci::_install_CRD
-  KUBECTL="minikube kubectl --" make run  >/dev/null 2>&1 &
+  make run  >/dev/null 2>&1 &
   log::info "controller started"
   popd
   log::info "starting xline cluster"

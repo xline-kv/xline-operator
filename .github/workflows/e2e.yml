@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.actor }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+env:
+  KIND_VERSION: v0.20.0
+  GO_VERSION: '1.21.3'
 
 jobs:
   validation:
@@ -18,14 +21,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install Dependencies
-        run: sudo bash ./.github/scripts/install_deps.sh
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
           go-version-file: go/src/github.com/${{ github.repository }}/go.mod
-          go-version: 1.21.3
+          go-version: ${{ env.GO_VERSION }}
+      - name: 'Install Kind'
+        run: |
+          wget https://github.com/kubernetes-sigs/kind/releases/download/${{ env.KIND_VERSION }}/kind-linux-amd64
+          chmod +x kind-linux-amd64
+          mv kind-linux-amd64 /usr/local/bin/kind
       - name: 'E2E CI'
+        env:
+          KIND_CLUSTER_IMAGE: kindest/node:v1.25.3
         run: bash ./tests/e2e/e2e.sh -p ci
       - name: clean
         if: failure()

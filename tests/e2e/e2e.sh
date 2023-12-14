@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -8,6 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/cases/cases.sh"
 
 function setup() {
   testenv::k8s::create
+  testenv::k8s::load_images
   testenv::util::install
 }
 
