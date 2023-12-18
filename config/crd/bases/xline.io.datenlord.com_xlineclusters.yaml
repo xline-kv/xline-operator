@@ -35,6 +35,11 @@ spec:
           spec:
             description: XlineClusterSpec defines the desired state of XlineCluster
             properties:
+              args:
+                description: / Xline container arguments
+                items:
+                  type: string
+                type: array
               image:
                 description: Xline cluster image
                 type: string

@@ -57,6 +57,9 @@ type XlineClusterSpec struct {
 	// Xline cluster image
 	Image *string `json:"image,omitempty"`
 
+	/// Xline container arguments
+	Args []string `json:"args,omitempty"`
+
 	// ImagePullPolicy of Xline cluster Pods
 	// +optional
 	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`

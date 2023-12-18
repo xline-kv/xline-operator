@@ -82,8 +82,20 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Ports: []corev1.ContainerPort{
 			{Name: "xline-port", ContainerPort: XlinePort},
 		},
+		Command: []string{
+			"xline",
+			"--name", "$(POD_NAME)",
+			"--members", "$(MEMBERS)",
+			"--storage-engine", "rocksdb",
+			"--data-dir", "/usr/local/xline/data-dir",
+		},
 		Env: []corev1.EnvVar{
 			{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
+			{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			}},
 		},
 	}
 
