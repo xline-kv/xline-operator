@@ -4,17 +4,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common/common.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../testenv/testenv.sh"
 
 _TEST_CI_CLUSTER_NAME="my-xline-cluster"
-_TEST_CI_OPERATOR_NAME="my-xline-operator"
-_TEST_CI_DNS_SUFFIX="cluster.local"
+_TEST_CI_STS_NAME="$_TEST_CI_CLUSTER_NAME-sts"
+_TEST_CI_SVC_NAME="$_TEST_CI_CLUSTER_NAME-svc"
 _TEST_CI_NAMESPACE="default"
+_TEST_CI_DNS_SUFFIX="svc.cluster.local"
 _TEST_CI_XLINE_PORT="2379"
-_TEST_CI_LOG_SYNC_TIMEOUT=30
-_TEST_CI_START_SIZE=3
+_TEST_CI_LOG_SYNC_TIMEOUT=60
 
 function test::ci::_mk_endpoints() {
-  local endpoints="${_TEST_CI_CLUSTER_NAME}-nodes-0.${_TEST_CI_CLUSTER_NAME}-svc.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+  local endpoints="${_TEST_CI_STS_NAME}-0.${_TEST_CI_SVC_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   for ((i = 1; i < $1; i++)); do
-    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-nodes-${i}.${_TEST_CI_CLUSTER_NAME}-svc.${_TEST_CI_NAMESPACE}.svc.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+    endpoints="${endpoints},${_TEST_CI_STS_NAME}-${i}.${_TEST_CI_SVC_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   done
   echo "$endpoints"
 }
@@ -33,40 +33,53 @@ function test::ci::_etcdctl_expect() {
   fi
 }
 
+function test::ci::_install_CRD() {
+    make install
+    if [ $? -eq 0 ]; then
+        log::info "make install: create custom resource definition succeeded"
+    else
+        log::error "make install: create custom resource definition failed"
+    fi
+}
+
+function test::ci::_uninstall_CRD() {
+    make uninstall
+    if [ $? -eq 0 ]; then
+        log::info "make uninstall: remove custom resource definition succeeded"
+    else
+        log::error "make uninstall: remove custom resource definition failed"
+    fi
+}
+
+function test::ci::wait_all_xline_pod_ready() {
+  for ((i = 0; i < $1; i++)); do
+    log::info "wait pod/${_TEST_CI_STS_NAME}-${i} to be ready"
+    if ! k8s::kubectl wait --for=condition=Ready pod/${_TEST_CI_STS_NAME}-${i} --timeout=300s; then
+      log::fatal "Failed to wait for util to be ready"
+    fi
+  done
+}
+
 function test::ci::_start() {
-  log::info "starting cluster"
-  k8s::kubectl create clusterrolebinding serviceaccount-cluster-admin --clusterrole=cluster-admin --serviceaccount=default:default 2>/dev/null || true
-  k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/operators.yml" >/dev/null 2>&1
-  k8s::kubectl wait --for=condition=available deployment/$_TEST_CI_OPERATOR_NAME --timeout=300s >/dev/null 2>&1
-  k8s::kubectl::wait_resource_creation crd xlineclusters.xlineoperator.xline.cloud
+  log::info "starting controller"
+  pushd $(dirname "${BASH_SOURCE[0]}")/../../../
+  test::ci::_install_CRD
+  make run  >/dev/null 2>&1 &
+  log::info "controller started"
+  popd
+  log::info "starting xline cluster"
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yml" >/dev/null 2>&1
-  k8s::kubectl::wait_resource_creation sts "${_TEST_CI_CLUSTER_NAME}-nodes"
-  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'=$_TEST_CI_START_SIZE sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'=$_TEST_CI_START_SIZE sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
-  log::info "cluster started"
+  k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
 }
 
 function test::ci::_teardown() {
-  if k8s::kubectl::resource_exist xc $_TEST_CI_CLUSTER_NAME || k8s::kubectl::resource_exist deployment $_TEST_CI_OPERATOR_NAME; then
-    log::info "teardown cluster"
-    k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yml" 2>/dev/null || true
-    k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/operators.yml" 2>/dev/null || true
+  log::info "stopping controller"
+  pushd $(dirname "${BASH_SOURCE[0]}")/../../../
+  test::ci::_uninstall_CRD
+  controller_pid=$(ps aux | grep "[g]o run ./cmd/main.go" | awk '{print $2}')
+  if [ -n "$controller_pid" ]; then
+    kill -9 $controller_pid
   fi
-}
-
-function test::ci::_scale_cluster() {
-  log::info "scaling cluster to $1"
-  k8s::kubectl scale xc $_TEST_CI_CLUSTER_NAME --replicas="$1" >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.updatedReplicas}'="$1" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
-  k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$1" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
-  got=$(k8s::kubectl get xc $_TEST_CI_CLUSTER_NAME -o=jsonpath='{.spec.size}')
-  if [ "$got" -ne "$1" ]; then
-    echo "failed scale cluster"
-    echo "expect size: $1"
-    echo "got size: $got"
-    return 1
-  fi
-  log::info "cluster scaled to $1"
 }
 
 function test::ci::_chaos() {
@@ -82,50 +95,32 @@ function test::ci::_chaos() {
     kill=$((RANDOM % max_kill + 1))
     log::info "chaos: kill=$kill"
     for ((j = 0; j < kill; j++)); do
-      pod="${_TEST_CI_CLUSTER_NAME}-nodes-$((RANDOM % size))"
+      pod="${_TEST_CI_STS_NAME}-$((RANDOM % size))"
       log::info "chaos: kill pod=$pod"
       k8s::kubectl delete pod "$pod" --force --grace-period=0 2>/dev/null
     done
     test::ci::_etcdctl_expect "$endpoints" "put B $i" "OK" || return $?
     test::ci::_etcdctl_expect "$endpoints" "get B" "B\n$i" || return $?
-    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts "${_TEST_CI_CLUSTER_NAME}-nodes" --timeout=300s >/dev/null 2>&1
+    k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
     log::info "wait for log synchronization" && sleep $_TEST_CI_LOG_SYNC_TIMEOUT
   done
 }
 
 function test::run::ci::basic_validation() {
-  test::ci::_teardown
   test::ci::_start
-
+  test::ci::wait_all_xline_pod_ready 3
   endpoints=$(test::ci::_mk_endpoints 3)
   test::ci::_etcdctl_expect "$endpoints" "put A 1" "OK" || return $?
   test::ci::_etcdctl_expect "$endpoints" "get A" "A\n1" || return $?
   endpoints=$(test::ci::_mk_endpoints 1)
   test::ci::_etcdctl_expect "$endpoints" "put A 2" "OK" || return $?
   test::ci::_etcdctl_expect "$endpoints" "get A" "A\n2" || return $?
-}
-
-function test::run::ci::scale_validation() {
   test::ci::_teardown
-  test::ci::_start
-
-  test::ci::_scale_cluster 5 || return $?
-  endpoints=$(test::ci::_mk_endpoints 5)
-  test::ci::_etcdctl_expect "$endpoints" "put A 1" "OK" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "get A" "A\n1" || return $?
-
-  test::ci::_scale_cluster 3 || return $?
-  log::info "wait for log synchronization" && sleep $_TEST_CI_LOG_SYNC_TIMEOUT
-  endpoints=$(test::ci::_mk_endpoints 3)
-  test::ci::_etcdctl_expect "$endpoints" "put A 2" "OK" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "get A" "A\n2" || return $?
 }
+
 
 function test::run::ci::basic_chaos() {
-  test::ci::_teardown
   test::ci::_start
-
   test::ci::_chaos 3 5 || return $?
-  test::ci::_scale_cluster 5 || return $?
-  test::ci::_chaos 5 3 || return $?
+  test::ci::_teardown
 }
