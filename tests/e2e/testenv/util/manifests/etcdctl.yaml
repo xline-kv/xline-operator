@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: etcdctl
-      image: gcr.io/etcd-development/etcd:v3.5.5
+      image: ghcr.io/xline-kv/etcdctl:v3.5.9
       imagePullPolicy: IfNotPresent
       command:
         - bash
