@@ -46,6 +46,38 @@ func GetMemberTopology(stsRef types.NamespacedName, svcName string, replicas int
 	return strings.Join(members, ",")
 }
 
+func GetAuthSecretVolume(auth_sec *xapi.XlineAuthSecret) []corev1.Volume {
+	if auth_sec == nil {
+		return []corev1.Volume{}
+	}
+	return []corev1.Volume{
+		{Name: "auth-cred", VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: *auth_sec.Name,
+			},
+		}},
+	}
+}
+
+func GetAuthSecretVolumeMount(auth_sec *xapi.XlineAuthSecret) []corev1.VolumeMount {
+	if auth_sec == nil {
+		return []corev1.VolumeMount{}
+	}
+	return []corev1.VolumeMount{
+		{Name: "auth-cred", ReadOnly: true, MountPath: *auth_sec.MountPath},
+	}
+}
+
+func GetAuthSecretEnvVars(auth_sec *xapi.XlineAuthSecret) []corev1.EnvVar {
+	if auth_sec == nil {
+		return []corev1.EnvVar{}
+	}
+	return []corev1.EnvVar{
+		{Name: "AUTH_PUBLIC_KEY", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PubKey)},
+		{Name: "AUTH_PRIVATE_KEY", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PriKey)},
+	}
+}
+
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
 	svcRef := GetServiceKey(cr.ObjKey())
 	svcLabel := GetXlineInstanceLabels(cr.ObjKey())
@@ -83,7 +115,19 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		"--data-dir", DataDir,
 	}
 
+	envs := []corev1.EnvVar{
+		{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
+		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.name",
+			},
+		}},
+	}
+	envs = append(envs, GetAuthSecretEnvVars(cr.Spec.AuthSecrets)...)
+
 	initCmd = append(initCmd, cr.Spec.BootArgs()...)
+	volumes := GetAuthSecretVolume(cr.Spec.AuthSecrets)
+	volumeMount := GetAuthSecretVolumeMount(cr.Spec.AuthSecrets)
 
 	// pod template: main container
 	mainContainer := corev1.Container{
@@ -93,15 +137,9 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Ports: []corev1.ContainerPort{
 			{Name: "xline-port", ContainerPort: XlinePort},
 		},
-		Command: initCmd,
-		Env: []corev1.EnvVar{
-			{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
-			{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.name",
-				},
-			}},
-		},
+		Command:      initCmd,
+		Env:          envs,
+		VolumeMounts: volumeMount,
 	}
 
 	// pod template
@@ -110,6 +148,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 			Labels: stsLabels,
 		},
 		Spec: corev1.PodSpec{
+			Volumes:    volumes,
 			Containers: []corev1.Container{mainContainer},
 		},
 	}

@@ -133,6 +133,16 @@ type XlineClusterSpec struct {
 	// The replicas of xline nodes
 	// +kubebuilder:validation:Minimum=3
 	Replicas int32 `json:"replicas"`
+
+	// The auth secret keys
+	AuthSecrets *XlineAuthSecret `json:"authSecret,omitempty"`
+}
+
+type XlineAuthSecret struct {
+	Name      *string `json:"name"`
+	MountPath *string `json:"mountPath"`
+	PubKey    *string `json:"pubKey"`
+	PriKey    *string `json:"priKey"`
 }
 
 func (s *XlineClusterSpec) BootArgs() []string {
