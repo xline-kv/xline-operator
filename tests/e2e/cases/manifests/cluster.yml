@@ -8,3 +8,8 @@ spec:
   image: phoenix500526/xline
   imagePullPolicy: IfNotPresent
   replicas: 3
+  authSecret:
+    name: auth-cred
+    mountPath: /tmp/auth-cred
+    pubKey: auth-jwt.pub
+    priKey: auth-jwt.pri
