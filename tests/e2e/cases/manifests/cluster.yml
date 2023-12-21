@@ -1,0 +1,12 @@
+apiVersion: xline.kvstore.datenlord.com/v1alpha1
+kind: XlineCluster
+metadata:
+  name: my-xline-cluster
+spec:
+  # TODO: replace it with ghcr.io/xline-kv/xline:v0.6.1 when xline 0.6.1 is ready.
+  version: v0.6.1
+  image: phoenix500526/xline
+  imagePullPolicy: IfNotPresent
+  replicas: 3
+  config:
+    init-leader: "hello"
