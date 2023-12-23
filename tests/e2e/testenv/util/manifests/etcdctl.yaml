@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcdctl
+spec:
+  containers:
+    - name: etcdctl
+      image: ghcr.io/xline-kv/etcdctl:v3.5.9
+      imagePullPolicy: IfNotPresent
+      command:
+        - bash
+      args:
+        - -c
+        - trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT; while true; do sleep 10 & wait; done
+  enableServiceLinks: false
