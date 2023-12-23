@@ -136,6 +136,14 @@ type XlineClusterSpec struct {
 
 	// The auth secret keys
 	AuthSecrets *XlineAuthSecret `json:"authSecret,omitempty"`
+
+	// K8s storage-class-name of the Xline storage
+	// Defaults to Kubernetes default storage class.
+	// +optional
+	StorageClassName *string `json:"storageClassName"`
+
+	// Defines the specification of resource cpu, mem, storage.
+	corev1.ResourceRequirements `json:",inline"`
 }
 
 type XlineAuthSecret struct {
