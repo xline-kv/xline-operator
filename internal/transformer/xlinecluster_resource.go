@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
+	"github.com/xline-kv/xline-operator/internal/util"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -108,13 +109,17 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 	svcName := GetServiceKey(cr.ObjKey()).Name
 
 	volumes := GetAuthSecretVolume(cr.Spec.AuthSecrets)
-	volumeMount := GetAuthSecretVolumeMount(cr.Spec.AuthSecrets)
-
+	volumeMounts := GetAuthSecretVolumeMount(cr.Spec.AuthSecrets)
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "xline-storage", MountPath: "/usr/local/xline/data-dir"})
 	envs := []corev1.EnvVar{
 		{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
 	}
 
 	envs = append(envs, GetAuthSecretEnvVars(cr.Spec.AuthSecrets)...)
+
+	pvcTemplates := []corev1.PersistentVolumeClaim{
+		util.NewReadWriteOncePVC("xline-storage", cr.Spec.StorageClassName, cr.Spec.Requests.Storage()),
+	}
 
 	// pod template: main container
 	mainContainer := corev1.Container{
@@ -125,7 +130,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 			{Name: "xline-port", ContainerPort: 2379},
 		},
 		Env:          envs,
-		VolumeMounts: volumeMount,
+		VolumeMounts: volumeMounts,
 	}
 
 	// pod template
@@ -149,10 +154,11 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 			Labels:    stsLabels,
 		},
 		Spec: appv1.StatefulSetSpec{
-			Replicas:    &cr.Spec.Replicas,
-			ServiceName: svcName,
-			Selector:    &metav1.LabelSelector{MatchLabels: stsLabels},
-			Template:    podTemplate,
+			Replicas:             &cr.Spec.Replicas,
+			ServiceName:          svcName,
+			Selector:             &metav1.LabelSelector{MatchLabels: stsLabels},
+			VolumeClaimTemplates: pvcTemplates,
+			Template:             podTemplate,
 		},
 	}
 
