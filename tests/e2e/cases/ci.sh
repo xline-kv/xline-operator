@@ -10,6 +10,7 @@ _TEST_CI_SECRET_NAME="auth-cred"
 _TEST_CI_NAMESPACE="default"
 _TEST_CI_DNS_SUFFIX="svc.cluster.local"
 _TEST_CI_XLINE_PORT="2379"
+_TEST_CI_STORAGECLASS_NAME="e2e-storage"
 _TEST_CI_LOG_SYNC_TIMEOUT=60
 
 function test::ci::_mk_endpoints() {
@@ -117,6 +118,44 @@ function test::ci::wait_all_xline_pod_ready() {
   done
 }
 
+function test::ci::wait_all_xline_pod_deleted() {
+  for ((i = 0; i < $1; i++)); do
+    log::info "wait pod/${_TEST_CI_STS_NAME}-${i} to be ready"
+    if ! k8s::kubectl wait --for=delete pod/${_TEST_CI_STS_NAME}-${i} --timeout=300s; then
+      log::fatal "Failed to wait for util to be ready"
+    fi
+  done
+}
+
+function test::ci::_prepare_pv() {
+  log::info "create persistent volume and storage class"
+  mkdir -p /tmp/host-500m-pv1 /tmp/host-500m-pv2 /tmp/host-500m-pv3
+  k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/e2e-storage.yaml" >/dev/null 2>&1
+  k8s::kubectl::wait_resource_creation storageclass $_TEST_CI_STORAGECLASS_NAME
+  k8s::kubectl::wait_resource_creation pv "host-500m-pv1"
+  k8s::kubectl::wait_resource_creation pv "host-500m-pv2"
+  k8s::kubectl::wait_resource_creation pv "host-500m-pv3"
+}
+
+function test::ci::_clean_pvc() {
+  for ((i = 0; i < $1; i++)); do
+    local pvc_name="xline-storage-${_TEST_CI_STS_NAME}-${i}"
+    log::info "deleting pvc $pvc_name ..."
+    k8s::kubectl delete pvc $pvc_name >/dev/null 2>&1
+    if ! k8s::kubectl wait --for=delete pvc/${pvc_name} --timeout=300s; then
+      log::fatal "Failed to wait for pvc/${pvc_name} to be deleted"
+    fi
+  done
+}
+
+function test::ci::_clean_pv() {
+  log::info "delete persistent volume claim"
+  log::info "delete persistent volume and storage class"
+  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/e2e-storage.yaml"
+  log::info "pv has been deleted"
+  rm -rf /tmp/host-500m-pv1 /tmp/host-500m-pv2 /tmp/host-500m-pv3
+}
+
 function test::ci::_start() {
   log::info "starting controller"
   pushd $(dirname "${BASH_SOURCE[0]}")/../../../
@@ -127,6 +166,7 @@ function test::ci::_start() {
   log::info "create xline auth key pairs"
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/auth-cred.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation secret $_TEST_CI_SECRET_NAME
+  test::ci::_prepare_pv
   log::info "starting xline cluster"
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
@@ -136,10 +176,15 @@ function test::ci::_teardown() {
   log::info "stopping controller"
   pushd $(dirname "${BASH_SOURCE[0]}")/../../../
   test::ci::_uninstall_CRD
-  controller_pid=$(ps aux | grep "[g]o run ./cmd/main.go" | awk '{print $2}')
+  controller_pid=$(lsof -i:8081 | awk 'NR==2 {print $2}')
   if [ -n "$controller_pid" ]; then
     kill -9 $controller_pid
   fi
+  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
+  test::ci::wait_all_xline_pod_deleted 3
+  test::ci::_clean_pvc 3
+  test::ci::_clean_pv
+  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/auth-cred.yaml" >/dev/null 2>&1
 }
 
 function test::ci::_chaos() {
