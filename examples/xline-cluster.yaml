@@ -1,0 +1,8 @@
+apiVersion: xline.io.datenlord.com/v1alpha1
+kind: XlineCluster
+metadata:
+  name: my-xline-cluster
+spec:
+  image: ghcr.io/xline-kv/xline:v0.6.1
+  imagePullPolicy: IfNotPresent
+  replicas: 3
