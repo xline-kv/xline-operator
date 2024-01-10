@@ -44,6 +44,7 @@ func (r *ReconcileContext) CreateOrUpdate(obj client.Object, objType client.Obje
 		r.Log.Info("create object: " + util.K8sObjKeyStr(key))
 		return nil
 	} else {
+		r.Log.Info("update object: " + util.K8sObjKeyStr(key))
 		return r.Update(r.Ctx, obj)
 	}
 }
