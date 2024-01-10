@@ -13,6 +13,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const (
+	XlinePort = 2379
+)
+
 func GetServiceKey(xlineClusterName types.NamespacedName) types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: xlineClusterName.Namespace,
@@ -36,7 +40,7 @@ func GetMemberTopology(stsRef types.NamespacedName, svcName string, replicas int
 	for i := 0; i < replicas; i++ {
 		podName := fmt.Sprintf("%s-%d", stsRef.Name, i)
 		dnsName := fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, svcName, stsRef.Namespace)
-		members[i] = fmt.Sprintf("%s=%s:2379", podName, dnsName)
+		members[i] = fmt.Sprintf("%s=%s:%d", podName, dnsName, XlinePort)
 	}
 	return strings.Join(members, ",")
 }
@@ -53,7 +57,7 @@ func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service 
 			Ports: []corev1.ServicePort{
 				{
 					Name: "xline-port",
-					Port: 2379,
+					Port: XlinePort,
 				},
 			},
 			Selector:  svcLabel,
@@ -76,7 +80,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Image:           *cr.Spec.Image,
 		ImagePullPolicy: cr.Spec.ImagePullPolicy,
 		Ports: []corev1.ContainerPort{
-			{Name: "xline-port", ContainerPort: 2379},
+			{Name: "xline-port", ContainerPort: XlinePort},
 		},
 		Env: []corev1.EnvVar{
 			{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
