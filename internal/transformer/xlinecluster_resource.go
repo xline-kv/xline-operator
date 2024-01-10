@@ -31,11 +31,6 @@ func GetXlineInstanceLabels(xlineClusterName types.NamespacedName) map[string]st
 	return MakeResourceLabels(xlineClusterName.Name)
 }
 
-func GetXlineImage(r *xapi.XlineCluster) string {
-	version := r.Spec.Version
-	return fmt.Sprintf("%s:%s", *r.Spec.Image, version)
-}
-
 func GetMemberTopology(stsRef types.NamespacedName, svcName string, replicas int) string {
 	members := make([]string, replicas)
 	for i := 0; i < replicas; i++ {
@@ -78,7 +73,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 	// pod template: main container
 	mainContainer := corev1.Container{
 		Name:            "xline",
-		Image:           GetXlineImage(cr),
+		Image:           *cr.Spec.Image,
 		ImagePullPolicy: cr.Spec.ImagePullPolicy,
 		Ports: []corev1.ContainerPort{
 			{Name: "xline-port", ContainerPort: 2379},

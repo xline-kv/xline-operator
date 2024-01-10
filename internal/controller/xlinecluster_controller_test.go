@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -59,9 +58,7 @@ var _ = Describe("XlineCluster controller", func() {
 		It("Should increase XlineCluster Status count when a new XlineCluster resource is created", func() {
 			By("By creating a new XlineCluster")
 			ctx := context.Background()
-			image := "test-image"
-			version := "latest"
-			full_image := fmt.Sprintf("%s:%s", image, version)
+			image := "test-image:latest"
 			xlineCluster := &xapi.XlineCluster{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "xline.kvstore.datenlord.com/v1alpha1",
@@ -72,7 +69,6 @@ var _ = Describe("XlineCluster controller", func() {
 					Namespace: XlineClusterNamespace,
 				},
 				Spec: xapi.XlineClusterSpec{
-					Version:  version,
 					Image:    &image,
 					Replicas: 3,
 				},
@@ -89,14 +85,13 @@ var _ = Describe("XlineCluster controller", func() {
 			}, timeout, interval).Should(BeTrue())
 			// Let's make sure our Schedule string value was properly converted/handled.
 			Expect(createdXlineCluster.Spec.Replicas).Should(Equal(int32(3)))
-			Expect(createdXlineCluster.Spec.Version).Should(Equal(version))
 			Expect(*createdXlineCluster.Spec.Image).Should(Equal(image))
 
 			By("XlinCluster Status should be updated")
 			expected_status := ExpectClusterStatus{
 				Stage:          xapi.StageComplete,
 				StageStatus:    xapi.StageResultSucceeded,
-				Image:          full_image,
+				Image:          image,
 				StatefulSetRef: xapi.NewNamespacedName(xlineNamespaceName(XlineClusterStsName, XlineClusterNamespace)),
 				ServiceRef:     xapi.NewNamespacedName(xlineNamespaceName(XlineClusterSvcName, XlineClusterNamespace)),
 			}
