@@ -32,15 +32,14 @@ func (r *StCtrlErrSet) AsResult() (ctrl.Result, error) {
 	if r.Update != nil {
 		errMap["update-status"] = r.Update
 	}
-	mergedErr := MergeErrorsWithTag(errMap)
-	if mergedErr == nil {
+	if len(errMap) == 0 {
 		if updateConflict {
 			return ctrl.Result{Requeue: true}, nil
 		} else {
 			return ctrl.Result{}, nil
 		}
 	} else {
-		return ctrl.Result{Requeue: true}, mergedErr
+		return ctrl.Result{Requeue: true}, &MultiTaggedError{Errors: errMap}
 	}
 }
 
@@ -55,18 +54,4 @@ func (e *MultiTaggedError) Error() string {
 		errStrs = append(errStrs, fmt.Sprintf("[%s] %s", tag, err.Error()))
 	}
 	return strings.Join(errStrs, "; ")
-}
-
-// MergeErrorsWithTag merges multiple errors into one with tags.
-func MergeErrorsWithTag(errors map[string]error) *MultiTaggedError {
-	errMap := make(map[string]error)
-	for tag, err := range errors {
-		if err != nil {
-			errMap[tag] = err
-		}
-	}
-	if len(errMap) == 0 {
-		return nil
-	}
-	return &MultiTaggedError{Errors: errMap}
 }
