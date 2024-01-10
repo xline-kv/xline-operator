@@ -16,7 +16,7 @@ func TestStatusConvert(t *testing.T) {
 		res := sucStage.AsXlineClusterRecStatus()
 		assert.Equal(t, res.Stage, xapi.StageXlineService)
 		assert.Equal(t, res.StageStatus, xapi.StageResultSucceeded)
-		assert.True(t, res.LastMessage == "")
+		assert.Equal(t, res.LastMessage, "")
 	})
 
 	t.Run("Failed Status can covert to XlineClusterRecStatus properly", func(t *testing.T) {
@@ -25,5 +25,4 @@ func TestStatusConvert(t *testing.T) {
 		assert.Equal(t, res.StageStatus, xapi.StageResultFailed)
 		assert.Equal(t, res.LastMessage, "failed to create service")
 	})
-
 }
