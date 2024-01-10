@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
 // XlineCluster is the Schema for the xlineclusters API
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -83,12 +85,14 @@ const (
 	StageComplete         XlineClusterOprStage = "complete"
 )
 
+// XlineClusterRecStatus represents XlineCluster reconcile status
 type XlineClusterRecStatus struct {
 	Stage       XlineClusterOprStage `json:"stage,omitempty"`
 	StageStatus OprStageStatus       `json:"stageStatus,omitempty"`
 	LastMessage string               `json:"lastMessage,omitempty"`
 }
 
+// XlineClusterSyncStatus represents XlineCluster sync status
 type XlineClusterSyncStatus struct {
 	Image          string                       `json:"image,omitempty"`
 	StatefulSetRef NamespacedName               `json:"statefulSetRef,omitempty"`
