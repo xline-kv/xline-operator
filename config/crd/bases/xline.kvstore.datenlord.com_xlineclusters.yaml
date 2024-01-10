@@ -46,12 +46,8 @@ spec:
                 format: int32
                 minimum: 3
                 type: integer
-              version:
-                description: Xline cluster image version
-                type: string
             required:
             - replicas
-            - version
             type: object
           status:
             description: XlineClusterStatus defines the observed state of XlineCluster

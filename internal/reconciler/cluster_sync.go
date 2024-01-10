@@ -33,7 +33,7 @@ func (r *XlineClusterReconciler) syncXlineStatus(xlineStatus *xapi.XlineClusterS
 		return err
 	}
 	if exist {
-		xlineStatus.Image = tran.GetXlineImage(r.CR)
+		xlineStatus.Image = *r.CR.Spec.Image
 		xlineStatus.StatefulSetRef = xapi.NewNamespacedName(stsRef)
 		xlineStatus.Conditions = sts.Status.Conditions
 	}

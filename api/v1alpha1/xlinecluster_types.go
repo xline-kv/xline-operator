@@ -54,9 +54,6 @@ type XlineClusterList struct {
 // XlineClusterSpec defines the desired state of XlineCluster
 // +k8s:openapi-gen=true
 type XlineClusterSpec struct {
-	// Xline cluster image version
-	Version string `json:"version"`
-
 	// Xline cluster image
 	Image *string `json:"image,omitempty"`
 

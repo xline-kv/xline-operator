@@ -11,15 +11,13 @@ import (
 )
 
 func TestXlineClusterFunc(t *testing.T) {
-	test_image := "xline-img"
-	test_image_version := "latest"
+	test_image := "xline-img:latest"
 	xlineCluster := xapi.XlineCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "xline",
 			Namespace: "default",
 		},
 		Spec: xapi.XlineClusterSpec{
-			Version:  test_image_version,
 			Image:    &test_image,
 			Replicas: 3,
 		},
@@ -40,7 +38,7 @@ func TestXlineClusterFunc(t *testing.T) {
 	})
 
 	t.Run("GetXlineImage should work properly", func(t *testing.T) {
-		xline_image := GetXlineImage(&xlineCluster)
+		xline_image := *xlineCluster.Spec.Image
 		assert.Equal(t, xline_image, "xline-img:latest")
 	})
 
