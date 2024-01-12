@@ -5,52 +5,26 @@ recovering an xline cluster on Kubernetes.
 
 ## Getting Started
 
-### Setup RBAC for xline operator
+### Install xline operator
 
-Xline operator requires a `ClusterRole` with permission to create Kubernetes Custom Resource Definition (CRD).
-
-In this example, the `ClusterRole` specified in `examples/cluster-role.yml` will bind to the default service account
-through `examples/cluster-role-binding.yml`.
-You can change the binding if you want.
-
-Apply RBAC:
+Install the latest version of Xline Operator:
 
 ```bash
-$ kubectl apply -f examples/cluster-role.yml
-clusterrole.rbac.authorization.k8s.io/xline-operator-role created
-
-$ kubectl apply -f examples/cluster-role-binding.yml
-clusterrolebinding.rbac.authorization.k8s.io/xline-operator-rolebinding created
+$ kubectl apply -f examples/xline-operator.yaml
 ```
 
-Inspect RBAC:
+Check the installation status:
 
 ```bash
-$ kubectl describe clusterrole xline-operator-role
-Name:         xline-operator-role
-Labels:       <none>
-Annotations:  <none>
-PolicyRule:
-  Resources                                       Non-Resource URLs  Resource Names  Verbs
-  ---------                                       -----------------  --------------  -----
-  endpoints                                       []                 []              [*]
-  events                                          []                 []              [*]
-  persistentvolumeclaims                          []                 []              [*]
-  pods                                            []                 []              [*]
-  services                                        []                 []              [*]
-  customresourcedefinitions.apiextensions.k8s.io  []                 []              [*]
-  statefulsets.apps                               []                 []              [*]
-  cronjobs.batch                                  []                 []              [*]
-  xlineclusters.xlineoperator.xline.cloud         []                 []              [*]
-```
+# Check the CRDs
+$ kubectl get crds
+NAME                                   CREATED AT
+xlineclusters.xline.io.datenlord.com   2024-01-12T12:30:46Z
 
-### Setup xline operator
-
-Create a deployment:
-
-```bash
-$ kubectl apply -f examples/crd-deployment.yml
-deployment.apps/my-xline-operator created
+# Check the controller Pod status
+$  kubectl -n xline-operator-system get pods
+NAME                                                 READY   STATUS    RESTARTS   AGE
+xline-operator-controller-manager-5c9d5f6bc4-ndqzq   2/2     Running   0          98s
 ```
 
 xline operator will automatically create a CRD:
@@ -61,79 +35,39 @@ NAME                                      CREATED AT
 xlineclusters.xlineoperator.xline.cloud   -
 ```
 
-### Create an xline cluster
+### Create an Xline cluster
 
-Create an xline cluster:
+Follow the steps below to create an Xline cluster in your Kubernetes cluster:
 
 ```bash
-$ kubectl apply -f examples/xline-cluster-example.yml
-xlinecluster.xlineoperator.xline.cloud/my-xline-cluster created
+# Apply xline-cluster.yaml to your Kubernetes cluster
+$ kubectl apply -f examples/xline-cluster.yaml
+xlinecluster.xline.io.datenlord.com/my-xline-cluster created
 ```
+
+Note: the Xline cluster will be created in the `default` namespace by default. If you want to create it in another namespace, please modify the metadata.namespace field in the manifest YAML file or use the --namespace option.
 
 Inspect xline pods:
 
 ```bash
+# Get xline cluster info
+$ kubectl get xlinecluster
+NAME               AGE
+my-xline-cluster   -
+
+# Get Xline pod
 $ kubectl get pods
-NAME                                 READY   STATUS    RESTARTS        AGE
-my-xline-cluster-0                   1/1     Running   0               -
-my-xline-cluster-1                   1/1     Running   0               -
-my-xline-cluster-2                   1/1     Running   0               -
-```
-
-### Resize the xline cluster
-
-You can use `kubectl scale` to resize the replicas of xline servers. `xlinecluster` has a short name `xc`
-
-```bash
-$ kubectl scale xc my-xline-cluster --replicas=5
-xlinecluster.xlineoperator.xline.cloud/my-xline-cluster scaled
-```
-
-Then we have 5 xline servers now!
-
-```bash
-$ kubectl get pods
-NAME                                 READY   STATUS    RESTARTS      AGE
-my-xline-cluster-0                   1/1     Running   0             -
-my-xline-cluster-1                   1/1     Running   0             -
-my-xline-cluster-2                   1/1     Running   0             -
-my-xline-cluster-3                   1/1     Running   0             -
-my-xline-cluster-4                   1/1     Running   0             -
-```
-
-Notice that you cannot scale your cluster size less than 3. The operator cannot work with less than 3 nodes.
-
-```bash
-$ kubectl scale xc my-xline-cluster --replicas=1
-The XlineCluster "my-xline-cluster" is invalid: spec.size: Invalid value: 1: spec.size in body should be greater than or equal to 3
+NAME                     READY   STATUS    RESTARTS   AGE
+my-xline-cluster-sts-0   1/1     Running   0          -
+my-xline-cluster-sts-1   1/1     Running   0          -
+my-xline-cluster-sts-2   1/1     Running   0          -
 ```
 
 ### Delete the xline cluster
 
 ```bash
-$ kubectl delete -f examples/xline-cluster-example.yml
+$ kubectl delete -f examples/xline-cluster.yml
 ```
-
-### NodeAffinity
-
-You can use `affinity` to specify which nodes the xline servers should be scheduled on or which nodes should not be.
-
-Details about `affinity` can be found
-in [Kubernetes documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity).
-
-Create an xline cluster with `affinity`:
-
-```bash
-$ kubectl apply -f examples/affinity-example.yml
-```
-
-The above example will create an xline cluster with `affinity` that requires the xline servers to be scheduled on nodes
-which have an xline pod before.
-In other words, the xline cluster servers will be scheduled on the same node.
-
-You can replace the `topologyKey` with
-some other key to schedule the xline servers on different nodes shared the same `topologyKey`. You can also
-use `podAntiAffinity` to force the xline servers to be scheduled on different nodes.
 
 ## Code of Conduct
 
