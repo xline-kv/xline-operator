@@ -34,9 +34,9 @@ type XlineClusterReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=xline.kvstore.datenlord.com,resources=xlineclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=xline.kvstore.datenlord.com,resources=xlineclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=xline.kvstore.datenlord.com,resources=xlineclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=xline.io.datenlord.com,resources=xlineclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=xline.io.datenlord.com,resources=xlineclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=xline.io.datenlord.com,resources=xlineclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch

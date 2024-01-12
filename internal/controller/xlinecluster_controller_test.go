@@ -61,7 +61,7 @@ var _ = Describe("XlineCluster controller", func() {
 			image := "test-image:latest"
 			xlineCluster := &xapi.XlineCluster{
 				TypeMeta: metav1.TypeMeta{
-					APIVersion: "xline.kvstore.datenlord.com/v1alpha1",
+					APIVersion: "xline.io.datenlord.com/v1alpha1",
 					Kind:       "XlineCluster",
 				},
 				ObjectMeta: metav1.ObjectMeta{
