@@ -1,4 +1,4 @@
-apiVersion: xline.kvstore.datenlord.com/v1alpha1
+apiVersion: xline.io.datenlord.com/v1alpha1
 kind: XlineCluster
 metadata:
   labels:

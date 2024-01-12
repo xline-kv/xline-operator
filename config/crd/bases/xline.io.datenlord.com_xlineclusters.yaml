@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.13.0
-  name: xlineclusters.xline.kvstore.datenlord.com
+  name: xlineclusters.xline.io.datenlord.com
 spec:
-  group: xline.kvstore.datenlord.com
+  group: xline.io.datenlord.com
   names:
     kind: XlineCluster
     listKind: XlineClusterList

@@ -37,7 +37,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - xline.kvstore.datenlord.com
+  - xline.io.datenlord.com
   resources:
   - xlineclusters
   verbs:
@@ -49,13 +49,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - xline.kvstore.datenlord.com
+  - xline.io.datenlord.com
   resources:
   - xlineclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - xline.kvstore.datenlord.com
+  - xline.io.datenlord.com
   resources:
   - xlineclusters/status
   verbs:
