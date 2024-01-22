@@ -4,29 +4,27 @@ on:
   schedule:
     - cron: "00 19 * * *" # run ci periodically at 3 am
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
-env:
-  GO_VERSION: '1.21'
 
 jobs:
   format:
     name: Format
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{env.GO_VERSION}}
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
 
-    - name: Format code
-      uses: iamnotaturtle/auto-gofmt@v2.1.0
-      with:
-        # This part is also where you can pass other options, for example:
-        only_changed: True
+      - name: Format code
+        uses: iamnotaturtle/auto-gofmt@v2.1.0
+        with:
+          # This part is also where you can pass other options, for example:
+          only_changed: True
 
   lint:
     name: Lint Check
@@ -38,7 +36,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ${{env.GO_VERSION}}
+          go-version-file: go.mod
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
@@ -49,16 +47,16 @@ jobs:
     name: Xline Operator Test
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{env.GO_VERSION}}
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version-file: go.mod
 
-    - name: Build and test
-      run: make test
+      - name: Build and test
+        run: make test
 
   commit:
     name: Commit Message Validation
@@ -81,8 +79,8 @@ jobs:
     name: Spell Check
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Actions Repository
-      uses: actions/checkout@v2
+      - name: Checkout Actions Repository
+        uses: actions/checkout@v2
 
-    - name: Check Spelling
-      uses: crate-ci/typos@master
+      - name: Check Spelling
+        uses: crate-ci/typos@master
