@@ -35,8 +35,9 @@ spec:
           spec:
             description: XlineClusterSpec defines the desired state of XlineCluster
             properties:
-              args:
-                description: / Xline container arguments
+              bootstrapArgs:
+                description: / Xline container bootstrap arguments / Set additional
+                  arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
                 items:
                   type: string
                 type: array
