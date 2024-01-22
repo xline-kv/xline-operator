@@ -128,8 +128,8 @@ func (in *XlineClusterSpec) DeepCopyInto(out *XlineClusterSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Args != nil {
-		in, out := &in.Args, &out.Args
+	if in.BootstrapArgs != nil {
+		in, out := &in.BootstrapArgs, &out.BootstrapArgs
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

@@ -15,6 +15,7 @@ import (
 
 const (
 	XlinePort = 2379
+	DataDir   = "/usr/local/xline/data-dir"
 )
 
 func GetServiceKey(xlineClusterName types.NamespacedName) types.NamespacedName {
@@ -74,6 +75,16 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 	stsLabels := GetXlineInstanceLabels(crName)
 	svcName := GetServiceKey(cr.ObjKey()).Name
 
+	initCmd := []string{
+		"xline",
+		"--name", "$(POD_NAME)",
+		"--members", "$(MEMBERS)",
+		"--storage-engine", "rocksdb",
+		"--data-dir", DataDir,
+	}
+
+	initCmd = append(initCmd, cr.Spec.BootstrapArgs...)
+
 	// pod template: main container
 	mainContainer := corev1.Container{
 		Name:            "xline",
@@ -82,13 +93,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Ports: []corev1.ContainerPort{
 			{Name: "xline-port", ContainerPort: XlinePort},
 		},
-		Command: []string{
-			"xline",
-			"--name", "$(POD_NAME)",
-			"--members", "$(MEMBERS)",
-			"--storage-engine", "rocksdb",
-			"--data-dir", "/usr/local/xline/data-dir",
-		},
+		Command: initCmd,
 		Env: []corev1.EnvVar{
 			{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
 			{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
