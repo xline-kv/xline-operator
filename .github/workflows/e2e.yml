@@ -13,7 +13,6 @@ concurrency:
 
 env:
   KIND_VERSION: v0.20.0
-  GO_VERSION: '1.21.3'
 
 jobs:
   validation:
