@@ -10,7 +10,7 @@ _TEST_CI_SECRET_NAME="auth-cred"
 _TEST_CI_NAMESPACE="default"
 _TEST_CI_DNS_SUFFIX="svc.cluster.local"
 _TEST_CI_XLINE_PORT="2379"
-_TEST_CI_LOG_SYNC_TIMEOUT=60
+_TEST_CI_LOG_SYNC_TIMEOUT=30
 
 function test::ci::_mk_endpoints() {
   local endpoints="${_TEST_CI_STS_NAME}-0.${_TEST_CI_SVC_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
@@ -21,13 +21,13 @@ function test::ci::_mk_endpoints() {
 }
 
 function test::ci::_etcdctl_expect() {
-  log::debug "run command: etcdctl --endpoints=$1 $2"
+  log::info "run command: etcdctl --endpoints=$1 $2"
   got=$(testenv::util::etcdctl --endpoints="$1" "$2")
   expect=$(echo -e "$3")
   if [ "${got//$'\r'/}" == "$expect" ]; then
-    log::info "command run success"
+    log::info "command $2 run success"
   else
-    log::error "command run failed"
+    log::error "command $2 run failed"
     log::error "expect: $expect"
     log::error "got: $got"
     return 1
@@ -91,7 +91,9 @@ function test::ci::_auth_validation() {
 }
 
 function test::ci::_install_CRD() {
+    pushd $(dirname "${BASH_SOURCE[0]}")/../../../
     make install
+    popd
     if [ $? -eq 0 ]; then
         log::info "make install: create custom resource definition succeeded"
     else
@@ -100,7 +102,9 @@ function test::ci::_install_CRD() {
 }
 
 function test::ci::_uninstall_CRD() {
+    pushd $(dirname "${BASH_SOURCE[0]}")/../../../
     make uninstall
+    popd
     if [ $? -eq 0 ]; then
         log::info "make uninstall: remove custom resource definition succeeded"
     else
@@ -118,12 +122,9 @@ function test::ci::wait_all_xline_pod_ready() {
 }
 
 function test::ci::_start() {
-  log::info "starting controller"
-  pushd $(dirname "${BASH_SOURCE[0]}")/../../../
+  test::ci::stop_controller
   test::ci::_install_CRD
-  make run  >/dev/null 2>&1 &
-  log::info "controller started"
-  popd
+  test::ci::start_controller
   log::info "create xline auth key pairs"
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/auth-cred.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation secret $_TEST_CI_SECRET_NAME
@@ -132,29 +133,50 @@ function test::ci::_start() {
   k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
 }
 
-function test::ci::_teardown() {
-  log::info "stopping controller"
-  pushd $(dirname "${BASH_SOURCE[0]}")/../../../
-  test::ci::_uninstall_CRD
-  controller_pid=$(ps aux | grep "[g]o run ./cmd/main.go" | awk '{print $2}')
+function test::ci::start_controller() {
+    log::info "starting controller"
+    pushd $(dirname "${BASH_SOURCE[0]}")/../../../
+    make run >/dev/null 2>&1 &
+    popd
+    sleep 5
+    if kill -0 $!; then
+      log::info "Controller started"
+    else
+      log::error "Controller cannot failed"
+    fi
+}
+
+function test::ci::stop_controller() {
+  controller_pid=$(lsof -i:8081 | grep main | awk '{print $2}')
   if [ -n "$controller_pid" ]; then
     kill -9 $controller_pid
   fi
 }
 
+
+function test::ci::_teardown() {
+  log::info "stopping controller"
+  test::ci::_uninstall_CRD
+  test::ci::stop_controller
+  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
+  test::ci::wait_all_xline_pod_deleted 3
+  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/auth-cred.yaml" >/dev/null 2>&1
+}
+
 function test::ci::_chaos() {
   size=$1
   iters=$2
-  max_kill=$((size / 2))
-  log::info "chaos: size=$size, iters=$iters, max_kill=$max_kill"
+  majority=$((size / 2 + 1))
+  fault_tolerance=$((size - majority))
+  log::info "chaos: size=$size, iters=$iters, fault_tolerance=$fault_tolerance"
   for ((i = 0; i < iters; i++)); do
     log::info "chaos: iter=$i"
     endpoints=$(test::ci::_mk_endpoints size)
     test::ci::_etcdctl_expect "$endpoints" "put A $i" "OK" || return $?
     test::ci::_etcdctl_expect "$endpoints" "get A" "A\n$i" || return $?
-    kill=$((RANDOM % max_kill))
+    kill=$((RANDOM % fault_tolerance + 1))
     log::info "chaos: kill=$kill"
-    for ((j = 0; j < kill; j++)); do
+    for ((j = 0; j < $kill; j++)); do
       pod="${_TEST_CI_STS_NAME}-$((RANDOM % size))"
       log::info "chaos: kill pod=$pod"
       k8s::kubectl delete pod "$pod" --force --grace-period=0 2>/dev/null
