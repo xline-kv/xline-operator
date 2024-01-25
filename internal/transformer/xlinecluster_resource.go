@@ -83,7 +83,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		"--data-dir", DataDir,
 	}
 
-	initCmd = append(initCmd, cr.Spec.BootstrapArgs...)
+	initCmd = append(initCmd, cr.Spec.BootArgs()...)
 
 	// pod template: main container
 	mainContainer := corev1.Container{
