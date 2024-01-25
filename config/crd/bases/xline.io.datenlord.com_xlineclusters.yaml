@@ -38,9 +38,86 @@ spec:
               bootstrapArgs:
                 description: / Xline container bootstrap arguments / Set additional
                   arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
-                items:
-                  type: string
-                type: array
+                properties:
+                  authPrivateKey:
+                    type: string
+                  authPublicKey:
+                    type: string
+                  autoCompactMode:
+                    type: string
+                  autoPeriodicRetention:
+                    type: string
+                  autoRevisionRetention:
+                    type: string
+                  batchMaxSize:
+                    type: integer
+                  batchTimeout:
+                    type: string
+                  candidateTimeoutTicks:
+                    type: integer
+                  clientInitialRetryTimeout:
+                    type: string
+                  clientMaxRetryTimeout:
+                    type: string
+                  clientProposeTimeout:
+                    type: string
+                  clientUseBackoff:
+                    type: boolean
+                  clientWaitSyncedTimeout:
+                    type: string
+                  cmdWorkers:
+                    type: integer
+                  compactBatchSize:
+                    type: integer
+                  compactSleepInterval:
+                    type: string
+                  compactTimeout:
+                    type: string
+                  curpDir:
+                    type: string
+                  followerTimeoutTicks:
+                    type: integer
+                  gcInterval:
+                    type: string
+                  heartbeatInterval:
+                    type: string
+                  initialClusterState:
+                    type: string
+                  isLeader:
+                    type: boolean
+                  jaegerLevel:
+                    type: boolean
+                  jaegerOffline:
+                    type: boolean
+                  jaegerOnline:
+                    type: boolean
+                  jaegerOutputDir:
+                    type: string
+                  logEntriesCap:
+                    type: integer
+                  logFile:
+                    type: string
+                  logLevel:
+                    type: string
+                  logRotate:
+                    type: string
+                  quota:
+                    type: integer
+                  rangeRetryTimeout:
+                    type: string
+                  retryCount:
+                    type: integer
+                  retryTimeout:
+                    type: string
+                  rpcTimeout:
+                    type: string
+                  serverWaitSyncedTimeout:
+                    type: string
+                  syncVictimsInterval:
+                    type: string
+                  watchProgressNotifyInterval:
+                    type: string
+                type: object
               image:
                 description: Xline cluster image
                 type: string
