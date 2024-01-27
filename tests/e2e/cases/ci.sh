@@ -20,73 +20,42 @@ function test::ci::_mk_endpoints() {
   echo "$endpoints"
 }
 
-function test::ci::_etcdctl_expect() {
-  log::info "run command: etcdctl --endpoints=$1 $2"
-  got=$(testenv::util::etcdctl --endpoints="$1" "$2")
-  expect=$(echo -e "$3")
-  if [ "${got//$'\r'/}" == "$expect" ]; then
-    log::info "command $2 run success"
-  else
-    log::error "command $2 run failed"
-    log::error "expect: $expect"
-    log::error "got: $got"
-    return 1
-  fi
-}
-
-# run a command with expect output, based on key word match
-# args:
-#   $1: endpoints
-#   $2: command to run
-#   $3: key word to match
-function test::ci::_etcdctl_match() {
-    log::debug "run command: etcdctl --endpoints=$1 $2"
-    got=$(testenv::util::etcdctl --endpoints="$1" "$2")
-    expect=$(echo -e ${3})
-    if echo "${got}" | grep -q "${expect}"; then
-      log::info  "command run success"
-    else
-      log::error  "command run failed"
-      log::error  "expect: ${expect}"
-      log::error "got: $got"
-      return 1
-    fi
-}
-
 function test::ci::_auth_validation() {
   log::info "auth validation test running..."
   endpoints=$(test::ci::_mk_endpoints 3)
-  test::ci::_etcdctl_expect "$endpoints" "user add root:root" "User root created" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "role add root" "Role root created" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "user grant-role root root" "Role root is granted to user root" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root user list" "etcdserver: authentication is not enabled" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "auth enable" "Authentication Enabled" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:rot user list" "etcdserver: authentication failed, invalid user ID or password" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root auth status" "Authentication Status: true\nAuthRevision: 4" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root user add u:u" "User u created" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user u:u user add f:f" "etcdserver: permission denied" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root role add r" "Role r created" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root user grant-role u r" "Role r is granted to user u" || return $?
-  test::ci::_etcdctl_expect "$endpoints""--user root:root role grant-permission r readwrite key1" "Role r updated" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user u:u put key1 value1" "OK" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user u:u get key1" "key1\nvalue1" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user u:u role get r" "Role r\nKV Read:\n\tkey1\nKV Write:\n\tkey1" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user u:u user get u" "User: u\nRoles: r" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "echo 'new_password' | --user root:root user passwd --interactive=false u" "Password updated" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root role revoke-permission r key1" "Permission of key key1 is revoked from role r" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root user revoke-role u r" "Role r is revoked from user u" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root user list" "root\nu" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root role list" "r\nroot" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root user delete u" "User u deleted" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root role delete r" "Role r deleted" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root user get non_exist_user" "etcdserver: user name not found" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root user add root:root" "etcdserver: user name already exists" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root role get non_exist_role" "etcdserver: role name not found" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root role add root" "etcdserver: role name already exists" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root user revoke root r" "etcdserver: role is not granted to the user" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root role revoke root non_exist_key" "etcdserver: permission is not granted to the role" || return $?
-  test::ci::_etcdctl_match "$endpoints" "--user root:root user delete root" "etcdserver: invalid auth management" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "--user root:root auth disable" "Authentication Disabled" || return $?
+  ETCDCTL=$(testenv::util::etcdctl $endpoints)
+
+  testenv::util::run_with_expect "${ETCDCTL} user add root:root" "User root created" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} role add root" "Role root created" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} user grant-role root root" "Role root is granted to user root" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root user list" "etcdserver: authentication is not enabled" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} auth enable" "Authentication Enabled" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:rot user list" "etcdserver: authentication failed, invalid user ID or password" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root auth status" "Authentication Status: true\nAuthRevision: 4" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root user add u:u" "User u created" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user u:u user add f:f" "etcdserver: permission denied" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root role add r" "Role r created" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root user grant-role u r" "Role r is granted to user u" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root role grant-permission r readwrite key1" "Role r updated" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user u:u put key1 value1" "OK" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user u:u get key1" "key1\nvalue1" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user u:u role get r" "Role r\nKV Read:\n\tkey1\nKV Write:\n\tkey1" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user u:u user get u" "User: u\nRoles: r" || return $?
+  testenv::util::run_with_expect "echo 'new_password' | ${ETCDCTL} --user root:root user passwd --interactive=false u" "Password updated" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root role revoke-permission r key1" "Permission of key key1 is revoked from role r" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root user revoke-role u r" "Role r is revoked from user u" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root user list" "root\nu" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root role list" "r\nroot" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root user delete u" "User u deleted" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root role delete r" "Role r deleted" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root user get non_exist_user" "etcdserver: user name not found" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root user add root:root" "etcdserver: user name already exists" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root role get non_exist_role" "etcdserver: role name not found" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root role add root" "etcdserver: role name already exists" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root user revoke root r" "etcdserver: role is not granted to the user" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root role revoke root non_exist_key" "etcdserver: permission is not granted to the role" || return $?
+  testenv::util::run_with_match "${ETCDCTL} --user root:root user delete root" "etcdserver: invalid auth management" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} --user root:root auth disable" "Authentication Disabled" || return $?
   log::info "auth validation test passed"
 }
 
@@ -168,12 +137,13 @@ function test::ci::_chaos() {
   iters=$2
   majority=$((size / 2 + 1))
   fault_tolerance=$((size - majority))
+  endpoints=$(test::ci::_mk_endpoints $size)
+  ETCDCTL=$(testenv::util::etcdctl $endpoints)
   log::info "chaos: size=$size, iters=$iters, fault_tolerance=$fault_tolerance"
-  for ((i = 0; i < iters; i++)); do
+  for ((i = 0; i < $iters; i++)); do
     log::info "chaos: iter=$i"
-    endpoints=$(test::ci::_mk_endpoints size)
-    test::ci::_etcdctl_expect "$endpoints" "put A $i" "OK" || return $?
-    test::ci::_etcdctl_expect "$endpoints" "get A" "A\n$i" || return $?
+    testenv::util::run_with_expect "${ETCDCTL} put A $i" "OK" || return $?
+    testenv::util::run_with_expect "${ETCDCTL} get A" "A\n$i" || return $?
     kill=$((RANDOM % fault_tolerance + 1))
     log::info "chaos: kill=$kill"
     for ((j = 0; j < $kill; j++)); do
@@ -181,8 +151,8 @@ function test::ci::_chaos() {
       log::info "chaos: kill pod=$pod"
       k8s::kubectl delete pod "$pod" --force --grace-period=0 2>/dev/null
     done
-    test::ci::_etcdctl_expect "$endpoints" "put B $i" "OK" || return $?
-    test::ci::_etcdctl_expect "$endpoints" "get B" "B\n$i" || return $?
+    testenv::util::run_with_expect "${ETCDCTL} put B $i" "OK" || return $?
+    testenv::util::run_with_expect "${ETCDCTL} get B" "B\n$i" || return $?
     k8s::kubectl wait --for=jsonpath='{.status.readyReplicas}'="$size" sts/$_TEST_CI_CLUSTER_NAME --timeout=300s >/dev/null 2>&1
     log::info "wait for log synchronization" && sleep $_TEST_CI_LOG_SYNC_TIMEOUT
   done
@@ -192,11 +162,13 @@ function test::run::ci::basic_validation() {
   test::ci::_start
   test::ci::wait_all_xline_pod_ready 3
   endpoints=$(test::ci::_mk_endpoints 3)
-  test::ci::_etcdctl_expect "$endpoints" "put A 1" "OK" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "get A" "A\n1" || return $?
+  ETCDCTL=$(testenv::util::etcdctl $endpoints)
+  testenv::util::run_with_expect "${ETCDCTL} put A 1" "OK" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} get A" "A\n1" || return $?
   endpoints=$(test::ci::_mk_endpoints 1)
-  test::ci::_etcdctl_expect "$endpoints" "put A 2" "OK" || return $?
-  test::ci::_etcdctl_expect "$endpoints" "get A" "A\n2" || return $?
+  ETCDCTL=$(testenv::util::etcdctl $endpoints)
+  testenv::util::run_with_expect "${ETCDCTL} put A 2" "OK" || return $?
+  testenv::util::run_with_expect "${ETCDCTL} get A" "A\n2" || return $?
   test::ci::_auth_validation
   test::ci::_teardown
 }
