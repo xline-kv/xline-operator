@@ -17,11 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strconv"
+
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"strconv"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
@@ -115,6 +116,7 @@ type XlineClusterSpec struct {
 	Replicas int32 `json:"replicas"`
 }
 
+//nolint:gocyclo // seems not bad
 func (s *XlineClusterSpec) BootArgs() []string {
 	args := make([]string, 0)
 	if s.BootstrapArgs.IsLeader {
