@@ -2,16 +2,15 @@ pull_request_rules:
   - name: Automatic merge on approval
     conditions:
       - "#approved-reviews-by>=2"
-      - check-success=Outdated
-      - check-success=Audit
-      - check-success=Check
+      - check-success=Validation
       - check-success=Format
-      - check-success=Test
-      - check-success=Clippy
+      - check-success=Lint Check
+      - check-success=Xline Operator Test
       - check-success=Commit Message Validation
       - check-success=Spell Check
-      - check-success=Coverage
+      - check-success=Configuration changed
       - check-success=DCO
+      - check-success=Summary
       - status-success="codecov/patch"
       - status-success="codecov/project"
     actions:
