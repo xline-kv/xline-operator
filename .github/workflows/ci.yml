@@ -59,6 +59,14 @@ jobs:
       - name: Build and test
         run: make test
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: cover.out
+          fail_ci_if_error: true
+          verbose: true
+
   commit:
     name: Commit Message Validation
     runs-on: ubuntu-latest
