@@ -79,5 +79,4 @@ func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
 		return clusterStageFail(xapi.StageXlineStatefulSet, err)
 	}
 	return clusterStageSucc(xapi.StageComplete)
-
 }
