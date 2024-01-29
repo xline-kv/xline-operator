@@ -21,7 +21,8 @@ jobs:
           go-version-file: go.mod
 
       - name: Format code
-        uses: iamnotaturtle/auto-gofmt@v2.1.0
+        # replace with iamnotaturtle/auto-gofmt@v2.1.0 when the pr #5(https://github.com/iamnotaturtle/auto-gofmt/pull/6) merge
+        uses: Phoenix500526/auto-gofmt@v2.1.1
         with:
           # This part is also where you can pass other options, for example:
           only_changed: True
