@@ -39,83 +39,73 @@ spec:
                 description: / Xline container bootstrap arguments / Set additional
                   arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
                 properties:
-                  authPrivateKey:
+                  auth-private-key:
                     type: string
-                  authPublicKey:
+                  auth-public-key:
                     type: string
-                  autoCompactMode:
-                    type: string
-                  autoPeriodicRetention:
-                    type: string
-                  autoRevisionRetention:
-                    type: string
-                  batchMaxSize:
+                  batch-max-size:
                     type: integer
-                  batchTimeout:
+                  batch-timeout:
                     type: string
-                  candidateTimeoutTicks:
+                  candidate-timeout-ticks:
                     type: integer
-                  clientInitialRetryTimeout:
+                  client-initial-retry-timeout:
                     type: string
-                  clientMaxRetryTimeout:
+                  client-max-retry-timeout:
                     type: string
-                  clientProposeTimeout:
+                  client-propose-timeout:
                     type: string
-                  clientUseBackoff:
+                  client-use-backoff:
                     type: boolean
-                  clientWaitSyncedTimeout:
+                  client-wait-synced-timeout:
                     type: string
-                  cmdWorkers:
+                  cmd-workers:
                     type: integer
-                  compactBatchSize:
+                  compact-batch-size:
                     type: integer
-                  compactSleepInterval:
+                  compact-sleep-interval:
                     type: string
-                  compactTimeout:
+                  compact-timeout:
                     type: string
-                  curpDir:
+                  curp-dir:
                     type: string
-                  followerTimeoutTicks:
+                  follower-timeout-ticks:
                     type: integer
-                  gcInterval:
+                  gc-interval:
                     type: string
-                  heartbeatInterval:
+                  heartbeat-interval:
                     type: string
-                  initialClusterState:
+                  jaeger-level:
+                    type: boolean
+                  jaeger-offline:
+                    type: boolean
+                  jaeger-online:
+                    type: boolean
+                  jaeger-output-dir:
                     type: string
-                  isLeader:
-                    type: boolean
-                  jaegerLevel:
-                    type: boolean
-                  jaegerOffline:
-                    type: boolean
-                  jaegerOnline:
-                    type: boolean
-                  jaegerOutputDir:
-                    type: string
-                  logEntriesCap:
+                  log-entries-cap:
                     type: integer
-                  logFile:
+                  log-file:
                     type: string
-                  logLevel:
+                  log-level:
                     type: string
-                  logRotate:
+                  log-rotate:
                     type: string
                   quota:
                     type: integer
-                  rangeRetryTimeout:
+                  range-retry-timeout:
                     type: string
-                  retryCount:
+                  retry-count:
                     type: integer
-                  retryTimeout:
+                  retry-timeout:
                     type: string
-                  rpcTimeout:
+                  rpc-timeout:
                     type: string
-                  serverWaitSyncedTimeout:
+                  server-wait-synced-timeout:
                     type: string
-                  syncVictimsInterval:
+                  sync-victims-interval:
                     type: string
-                  watchProgressNotifyInterval:
+                  watch-progress-notify-interval:
                     type: string
                 type: object
               image:
