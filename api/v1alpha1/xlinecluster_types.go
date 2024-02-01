@@ -17,8 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"strconv"
-
+	"encoding/json"
+	"fmt"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,48 +49,41 @@ type XlineClusterList struct {
 	Items           []XlineCluster `json:"items"`
 }
 
-// XlineArgs
-// +k8s:openapi-gen=true
 type XlineArgs struct {
-	IsLeader                    bool    `json:"isLeader,omitempty"`
-	JaegerOffline               bool    `json:"jaegerOffline,omitempty"`
-	JaegerOnline                bool    `json:"jaegerOnline,omitempty"`
-	JaegerLevel                 bool    `json:"jaegerLevel,omitempty"`
-	ClientUseBackoff            bool    `json:"clientUseBackoff,omitempty"`
-	AuthPrivateKey              *string `json:"authPrivateKey,omitempty"`
-	AuthPublicKey               *string `json:"authPublicKey,omitempty"`
-	JaegerOutputDir             *string `json:"jaegerOutputDir,omitempty"`
-	LogFile                     *string `json:"logFile,omitempty"`
-	LogRotate                   *string `json:"logRotate,omitempty"`
-	LogLevel                    *string `json:"logLevel,omitempty"`
-	HeartbeatInterval           *string `json:"heartbeatInterval,omitempty"`
-	ServerWaitSyncedTimeout     *string `json:"serverWaitSyncedTimeout,omitempty"`
-	RetryTimeout                *string `json:"retryTimeout,omitempty"`
-	RpcTimeout                  *string `json:"rpcTimeout,omitempty"`
-	BatchTimeout                *string `json:"batchTimeout,omitempty"`
-	ClientWaitSyncedTimeout     *string `json:"clientWaitSyncedTimeout,omitempty"`
-	ClientProposeTimeout        *string `json:"clientProposeTimeout,omitempty"`
-	ClientInitialRetryTimeout   *string `json:"clientInitialRetryTimeout,omitempty"`
-	ClientMaxRetryTimeout       *string `json:"clientMaxRetryTimeout,omitempty"`
-	GcInterval                  *string `json:"gcInterval,omitempty"`
-	RangeRetryTimeout           *string `json:"rangeRetryTimeout,omitempty"`
-	CompactTimeout              *string `json:"compactTimeout,omitempty"`
-	SyncVictimsInterval         *string `json:"syncVictimsInterval,omitempty"`
-	WatchProgressNotifyInterval *string `json:"watchProgressNotifyInterval,omitempty"`
-	CurpDir                     *string `json:"curpDir,omitempty"`
-	CompactSleepInterval        *string `json:"compactSleepInterval,omitempty"`
-	AutoCompactMode             *string `json:"autoCompactMode,omitempty"`
-	AutoPeriodicRetention       *string `json:"autoPeriodicRetention,omitempty"`
-	AutoRevisionRetention       *string `json:"autoRevisionRetention,omitempty"`
-	InitialClusterState         *string `json:"initialClusterState,omitempty"`
-	RetryCount                  *int    `json:"retryCount,omitempty"`
-	BatchMaxSize                *int    `json:"batchMaxSize,omitempty"`
-	FollowerTimeoutTicks        *int    `json:"followerTimeoutTicks,omitempty"`
-	CandidateTimeoutTicks       *int    `json:"candidateTimeoutTicks,omitempty"`
-	LogEntriesCap               *int    `json:"logEntriesCap,omitempty"`
-	CmdWorkers                  *int    `json:"cmdWorkers,omitempty"`
-	CompactBatchSize            *int    `json:"compactBatchSize,omitempty"`
-	Quota                       *int    `json:"quota,omitempty"`
+	JaegerOffline               bool    `json:"jaeger-offline,omitempty"`
+	JaegerOnline                bool    `json:"jaeger-online,omitempty"`
+	JaegerLevel                 bool    `json:"jaeger-level,omitempty"`
+	ClientUseBackoff            bool    `json:"client-use-backoff,omitempty"`
+	AuthPrivateKey              *string `json:"auth-private-key,omitempty"`
+	AuthPublicKey               *string `json:"auth-public-key,omitempty"`
+	JaegerOutputDir             *string `json:"jaeger-output-dir,omitempty"`
+	LogFile                     *string `json:"log-file,omitempty"`
+	LogRotate                   *string `json:"log-rotate,omitempty"`
+	LogLevel                    *string `json:"log-level,omitempty"`
+	HeartbeatInterval           *string `json:"heartbeat-interval,omitempty"`
+	ServerWaitSyncedTimeout     *string `json:"server-wait-synced-timeout,omitempty"`
+	RetryTimeout                *string `json:"retry-timeout,omitempty"`
+	RpcTimeout                  *string `json:"rpc-timeout,omitempty"`
+	BatchTimeout                *string `json:"batch-timeout,omitempty"`
+	ClientWaitSyncedTimeout     *string `json:"client-wait-synced-timeout,omitempty"`
+	ClientProposeTimeout        *string `json:"client-propose-timeout,omitempty"`
+	ClientInitialRetryTimeout   *string `json:"client-initial-retry-timeout,omitempty"`
+	ClientMaxRetryTimeout       *string `json:"client-max-retry-timeout,omitempty"`
+	GcInterval                  *string `json:"gc-interval,omitempty"`
+	RangeRetryTimeout           *string `json:"range-retry-timeout,omitempty"`
+	CompactTimeout              *string `json:"compact-timeout,omitempty"`
+	SyncVictimsInterval         *string `json:"sync-victims-interval,omitempty"`
+	WatchProgressNotifyInterval *string `json:"watch-progress-notify-interval,omitempty"`
+	CurpDir                     *string `json:"curp-dir,omitempty"`
+	CompactSleepInterval        *string `json:"compact-sleep-interval,omitempty"`
+	RetryCount                  int     `json:"retry-count,omitempty"`
+	BatchMaxSize                int     `json:"batch-max-size,omitempty"`
+	FollowerTimeoutTicks        int     `json:"follower-timeout-ticks,omitempty"`
+	CandidateTimeoutTicks       int     `json:"candidate-timeout-ticks,omitempty"`
+	LogEntriesCap               int     `json:"log-entries-cap,omitempty"`
+	CmdWorkers                  int     `json:"cmd-workers,omitempty"`
+	CompactBatchSize            int     `json:"compact-batch-size,omitempty"`
+	Quota                       int     `json:"quota,omitempty"`
 }
 
 // ########################################
@@ -116,125 +109,22 @@ type XlineClusterSpec struct {
 	Replicas int32 `json:"replicas"`
 }
 
-//nolint:gocyclo // seems not bad
 func (s *XlineClusterSpec) BootArgs() []string {
+	bytes, err := json.Marshal(s.BootstrapArgs)
 	args := make([]string, 0)
-	if s.BootstrapArgs.IsLeader {
-		args = append(args, "--is-leader")
+	if err != nil {
+		return args
 	}
-	if s.BootstrapArgs.JaegerOffline {
-		args = append(args, "--jaeger-offline")
+	var data map[string]interface{}
+	if json.Unmarshal(bytes, &data) != nil {
+		return args
 	}
-	if s.BootstrapArgs.JaegerOnline {
-		args = append(args, "--jaeger-online")
-	}
-	if s.BootstrapArgs.JaegerLevel {
-		args = append(args, "--jaeger-level")
-	}
-	if s.BootstrapArgs.ClientUseBackoff {
-		args = append(args, "--client-use-backoff")
-	}
-	if s.BootstrapArgs.AuthPrivateKey != nil {
-		args = append(args, "--auth-private-key", *s.BootstrapArgs.AuthPrivateKey)
-	}
-	if s.BootstrapArgs.AuthPublicKey != nil {
-		args = append(args, "--auth-public-key", *s.BootstrapArgs.AuthPublicKey)
-	}
-	if s.BootstrapArgs.JaegerOutputDir != nil {
-		args = append(args, "--jaeger-output-dir", *s.BootstrapArgs.JaegerOutputDir)
-	}
-	if s.BootstrapArgs.LogFile != nil {
-		args = append(args, "--log-file", *s.BootstrapArgs.LogFile)
-	}
-	if s.BootstrapArgs.LogRotate != nil {
-		args = append(args, "--log-rotate", *s.BootstrapArgs.LogRotate)
-	}
-	if s.BootstrapArgs.LogLevel != nil {
-		args = append(args, "--log-level", *s.BootstrapArgs.LogLevel)
-	}
-	if s.BootstrapArgs.HeartbeatInterval != nil {
-		args = append(args, "--heartbeat-interval", *s.BootstrapArgs.HeartbeatInterval)
-	}
-	if s.BootstrapArgs.ServerWaitSyncedTimeout != nil {
-		args = append(args, "--server-wait-synced-timeout", *s.BootstrapArgs.ServerWaitSyncedTimeout)
-	}
-	if s.BootstrapArgs.RetryTimeout != nil {
-		args = append(args, "--retry-timeout", *s.BootstrapArgs.RetryTimeout)
-	}
-	if s.BootstrapArgs.RpcTimeout != nil {
-		args = append(args, "--rpc-timeout", *s.BootstrapArgs.RpcTimeout)
-	}
-	if s.BootstrapArgs.BatchTimeout != nil {
-		args = append(args, "--batch-timeout", *s.BootstrapArgs.BatchTimeout)
-	}
-	if s.BootstrapArgs.ClientWaitSyncedTimeout != nil {
-		args = append(args, "--client-wait-synced-timeout", *s.BootstrapArgs.ClientWaitSyncedTimeout)
-	}
-	if s.BootstrapArgs.ClientProposeTimeout != nil {
-		args = append(args, "--client-propose-timeout", *s.BootstrapArgs.ClientProposeTimeout)
-	}
-	if s.BootstrapArgs.ClientInitialRetryTimeout != nil {
-		args = append(args, "--client-initial-retry-timeout", *s.BootstrapArgs.ClientInitialRetryTimeout)
-	}
-	if s.BootstrapArgs.ClientMaxRetryTimeout != nil {
-		args = append(args, "--client-max-retry-timeout", *s.BootstrapArgs.ClientMaxRetryTimeout)
-	}
-	if s.BootstrapArgs.GcInterval != nil {
-		args = append(args, "--gc-interval", *s.BootstrapArgs.GcInterval)
-	}
-	if s.BootstrapArgs.RangeRetryTimeout != nil {
-		args = append(args, "--range-retry-timeout", *s.BootstrapArgs.RangeRetryTimeout)
-	}
-	if s.BootstrapArgs.CompactTimeout != nil {
-		args = append(args, "--compact-timeout", *s.BootstrapArgs.CompactTimeout)
-	}
-	if s.BootstrapArgs.SyncVictimsInterval != nil {
-		args = append(args, "--sync-victims-interval", *s.BootstrapArgs.SyncVictimsInterval)
-	}
-	if s.BootstrapArgs.WatchProgressNotifyInterval != nil {
-		args = append(args, "--watch-progress-notify-interval", *s.BootstrapArgs.WatchProgressNotifyInterval)
-	}
-	if s.BootstrapArgs.CurpDir != nil {
-		args = append(args, "--curp-dir", *s.BootstrapArgs.CurpDir)
-	}
-	if s.BootstrapArgs.CompactSleepInterval != nil {
-		args = append(args, "--compact-sleep-interval", *s.BootstrapArgs.CompactSleepInterval)
-	}
-	if s.BootstrapArgs.AutoCompactMode != nil {
-		args = append(args, "--auto-compact-mode", *s.BootstrapArgs.AutoCompactMode)
-	}
-	if s.BootstrapArgs.AutoPeriodicRetention != nil {
-		args = append(args, "--auto-periodic-retention", *s.BootstrapArgs.AutoPeriodicRetention)
-	}
-	if s.BootstrapArgs.AutoRevisionRetention != nil {
-		args = append(args, "--auto-revision-retention", *s.BootstrapArgs.AutoRevisionRetention)
-	}
-	if s.BootstrapArgs.InitialClusterState != nil {
-		args = append(args, "--initial-cluster-state", *s.BootstrapArgs.InitialClusterState)
-	}
-	if s.BootstrapArgs.RetryCount != nil {
-		args = append(args, "--retry-count", strconv.Itoa(*s.BootstrapArgs.RetryCount))
-	}
-	if s.BootstrapArgs.BatchMaxSize != nil {
-		args = append(args, "--batch-max-size", strconv.Itoa(*s.BootstrapArgs.BatchMaxSize))
-	}
-	if s.BootstrapArgs.FollowerTimeoutTicks != nil {
-		args = append(args, "--follower-timeout-ticks", strconv.Itoa(*s.BootstrapArgs.FollowerTimeoutTicks))
-	}
-	if s.BootstrapArgs.CandidateTimeoutTicks != nil {
-		args = append(args, "--candidate-timeout-ticks", strconv.Itoa(*s.BootstrapArgs.CandidateTimeoutTicks))
-	}
-	if s.BootstrapArgs.LogEntriesCap != nil {
-		args = append(args, "--log-entries-cap", strconv.Itoa(*s.BootstrapArgs.LogEntriesCap))
-	}
-	if s.BootstrapArgs.CmdWorkers != nil {
-		args = append(args, "--cmd-workers", strconv.Itoa(*s.BootstrapArgs.CmdWorkers))
-	}
-	if s.BootstrapArgs.CompactBatchSize != nil {
-		args = append(args, "--compact-batch-size", strconv.Itoa(*s.BootstrapArgs.CompactBatchSize))
-	}
-	if s.BootstrapArgs.Quota != nil {
-		args = append(args, "--quota", strconv.Itoa(*s.BootstrapArgs.Quota))
+	for k, v := range data {
+		if bv, ok := v.(bool); ok && bv {
+			args = append(args, fmt.Sprintf("--%s", k))
+			continue
+		}
+		args = append(args, fmt.Sprintf("--%s", k), fmt.Sprintf("%v", v))
 	}
 	return args
 }
