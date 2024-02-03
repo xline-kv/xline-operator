@@ -130,44 +130,30 @@ function test::ci::_clean_pv() {
 }
 
 function test::ci::_start() {
-  test::ci::stop_controller
-  test::ci::_install_CRD
-  test::ci::start_controller
-  log::info "create xline auth key pairs"
+  log::info "starting controller manager"
+  pushd ${CODE_BASE_DIR}
+  IMG=${OPERATOR_IMG} make deploy 2>/dev/null
+  if ! KUBECTL_NAMESPACE=${OPERATOR_NS} k8s::kubectl wait --for=condition=available deployment/xline-operator-controller-manager --timeout=300s; then
+    log::fatal "Failed to wait for xline-operator-controller-manager to be ready"
+  fi
+  popd
+  log::info "controller manager started"
+  log::info "creating xline auth key pairs..."
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/auth-cred.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation secret $_TEST_CI_SECRET_NAME
   test::ci::_prepare_pv
-  log::info "starting xline cluster"
+  log::info "starting xline cluster..."
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
   k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
 }
 
-function test::ci::start_controller() {
-    log::info "starting controller"
-    pushd $(dirname "${BASH_SOURCE[0]}")/../../../
-    make run >/dev/null 2>&1 &
-    popd
-    sleep 5
-    if kill -0 $!; then
-      log::info "Controller started"
-    else
-      log::error "Controller cannot failed"
-    fi
-}
-
-function test::ci::stop_controller() {
-  controller_pid=$(lsof -i:8081 | grep main | awk '{print $2}')
-  if [ -n "$controller_pid" ]; then
-    kill -9 $controller_pid
-  fi
-}
 
 
 function test::ci::_teardown() {
-  log::info "stopping controller"
-  test::ci::_uninstall_CRD
-  test::ci::stop_controller
-  k8s::kubectl delete -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
+  log::info "stopping controller manager..."
+  pushd ${CODE_BASE_DIR}
+  IMG=${OPERATOR_IMG} make undeploy 2>/dev/null
+  popd
   test::ci::wait_all_xline_pod_deleted 3
   test::ci::_clean_pvc 3
   test::ci::_clean_pv

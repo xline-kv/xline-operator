@@ -14,13 +14,16 @@ function testenv::k8s::delete() {
 }
 
 function testenv::k8s::load_images() {
-  # xline image
   log::info "Loading images"
-  xline_image="phoenix500526/xline:v0.6.1"
-  docker pull "$xline_image" 2>/dev/null
-  testenv::k8s::kind::load_image "$xline_image"
-  # etcdctl image
-  etcdctl_image="ghcr.io/xline-kv/etcdctl:v3.5.9"
-  docker pull "$etcdctl_image" 2>/dev/null
-  testenv::k8s::kind::load_image "$etcdctl_image"
+  # xline operator image
+  pushd ${CODE_BASE_DIR}
+  IMG=${OPERATOR_IMG} make docker-build 2>/dev/null
+  popd
+  testenv::k8s::kind::load_image "$OPERATOR_IMG"
+
+  remote_images=("phoenix500526/xline:v0.6.1" "ghcr.io/xline-kv/etcdctl:v3.5.9" "quay.io/brancz/kube-rbac-proxy:v0.15.0")
+  for img in "${remote_images[@]}"; do
+    docker pull "$img" 2>/dev/null
+    testenv::k8s::kind::load_image "$img"
+  done
 }
