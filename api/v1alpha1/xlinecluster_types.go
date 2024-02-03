@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"encoding/json"
 	"fmt"
+
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,40 +51,65 @@ type XlineClusterList struct {
 }
 
 type XlineArgs struct {
-	JaegerOffline               bool    `json:"jaeger-offline,omitempty"`
-	JaegerOnline                bool    `json:"jaeger-online,omitempty"`
-	JaegerLevel                 bool    `json:"jaeger-level,omitempty"`
-	ClientUseBackoff            bool    `json:"client-use-backoff,omitempty"`
-	AuthPrivateKey              *string `json:"auth-private-key,omitempty"`
-	AuthPublicKey               *string `json:"auth-public-key,omitempty"`
-	JaegerOutputDir             *string `json:"jaeger-output-dir,omitempty"`
-	LogFile                     *string `json:"log-file,omitempty"`
-	LogRotate                   *string `json:"log-rotate,omitempty"`
-	LogLevel                    *string `json:"log-level,omitempty"`
-	HeartbeatInterval           *string `json:"heartbeat-interval,omitempty"`
-	ServerWaitSyncedTimeout     *string `json:"server-wait-synced-timeout,omitempty"`
-	RetryTimeout                *string `json:"retry-timeout,omitempty"`
-	RpcTimeout                  *string `json:"rpc-timeout,omitempty"`
-	BatchTimeout                *string `json:"batch-timeout,omitempty"`
-	ClientWaitSyncedTimeout     *string `json:"client-wait-synced-timeout,omitempty"`
-	ClientProposeTimeout        *string `json:"client-propose-timeout,omitempty"`
-	ClientInitialRetryTimeout   *string `json:"client-initial-retry-timeout,omitempty"`
-	ClientMaxRetryTimeout       *string `json:"client-max-retry-timeout,omitempty"`
-	GcInterval                  *string `json:"gc-interval,omitempty"`
-	RangeRetryTimeout           *string `json:"range-retry-timeout,omitempty"`
-	CompactTimeout              *string `json:"compact-timeout,omitempty"`
-	SyncVictimsInterval         *string `json:"sync-victims-interval,omitempty"`
+	JaegerOffline    bool    `json:"jaeger-offline,omitempty"`
+	JaegerOnline     bool    `json:"jaeger-online,omitempty"`
+	JaegerLevel      bool    `json:"jaeger-level,omitempty"`
+	ClientUseBackoff bool    `json:"client-use-backoff,omitempty"`
+	AuthPrivateKey   *string `json:"auth-private-key,omitempty"`
+	AuthPublicKey    *string `json:"auth-public-key,omitempty"`
+	JaegerOutputDir  *string `json:"jaeger-output-dir,omitempty"`
+	LogFile          *string `json:"log-file,omitempty"`
+	LogRotate        *string `json:"log-rotate,omitempty"`
+
+	// +kubebuilder:validation:Enum=off;info;error;warn;trace;debug
+	LogLevel *string `json:"log-level,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	HeartbeatInterval *string `json:"heartbeat-interval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	ServerWaitSyncedTimeout *string `json:"server-wait-synced-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	RetryTimeout *string `json:"retry-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	RpcTimeout *string `json:"rpc-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	BatchTimeout *string `json:"batch-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	ClientWaitSyncedTimeout *string `json:"client-wait-synced-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	ClientProposeTimeout *string `json:"client-propose-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	ClientInitialRetryTimeout *string `json:"client-initial-retry-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	ClientMaxRetryTimeout *string `json:"client-max-retry-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	GcInterval *string `json:"gc-interval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	RangeRetryTimeout *string `json:"range-retry-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	CompactTimeout *string `json:"compact-timeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	SyncVictimsInterval *string `json:"sync-victims-interval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
 	WatchProgressNotifyInterval *string `json:"watch-progress-notify-interval,omitempty"`
 	CurpDir                     *string `json:"curp-dir,omitempty"`
-	CompactSleepInterval        *string `json:"compact-sleep-interval,omitempty"`
-	RetryCount                  int     `json:"retry-count,omitempty"`
-	BatchMaxSize                int     `json:"batch-max-size,omitempty"`
-	FollowerTimeoutTicks        int     `json:"follower-timeout-ticks,omitempty"`
-	CandidateTimeoutTicks       int     `json:"candidate-timeout-ticks,omitempty"`
-	LogEntriesCap               int     `json:"log-entries-cap,omitempty"`
-	CmdWorkers                  int     `json:"cmd-workers,omitempty"`
-	CompactBatchSize            int     `json:"compact-batch-size,omitempty"`
-	Quota                       int     `json:"quota,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
+	CompactSleepInterval *string `json:"compact-sleep-interval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(B|MB|GB)
+	BatchMaxSize *string `json:"batch-max-size,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	RetryCount int `json:"retry-count,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	FollowerTimeoutTicks int `json:"follower-timeout-ticks,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	CandidateTimeoutTicks int `json:"candidate-timeout-ticks,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	LogEntriesCap int `json:"log-entries-cap,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	CmdWorkers int `json:"cmd-workers,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	CompactBatchSize int `json:"compact-batch-size,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	Quota int `json:"quota,omitempty"`
 }
 
 // ########################################

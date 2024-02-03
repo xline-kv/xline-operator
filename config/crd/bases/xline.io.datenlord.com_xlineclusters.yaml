@@ -44,36 +44,50 @@ spec:
                   auth-public-key:
                     type: string
                   batch-max-size:
-                    type: integer
+                    pattern: \d+(B|MB|GB)
+                    type: string
                   batch-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   candidate-timeout-ticks:
+                    minimum: 1
                     type: integer
                   client-initial-retry-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   client-max-retry-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   client-propose-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   client-use-backoff:
                     type: boolean
                   client-wait-synced-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   cmd-workers:
+                    minimum: 1
                     type: integer
                   compact-batch-size:
+                    minimum: 1
                     type: integer
                   compact-sleep-interval:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   compact-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   curp-dir:
                     type: string
                   follower-timeout-ticks:
+                    minimum: 1
                     type: integer
                   gc-interval:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   heartbeat-interval:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   jaeger-level:
                     type: boolean
@@ -84,28 +98,44 @@ spec:
                   jaeger-output-dir:
                     type: string
                   log-entries-cap:
+                    minimum: 1
                     type: integer
                   log-file:
                     type: string
                   log-level:
+                    enum:
+                    - "off"
+                    - info
+                    - error
+                    - warn
+                    - trace
+                    - debug
                     type: string
                   log-rotate:
                     type: string
                   quota:
+                    minimum: 1
                     type: integer
                   range-retry-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   retry-count:
+                    minimum: 1
                     type: integer
                   retry-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   rpc-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   server-wait-synced-timeout:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   sync-victims-interval:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                   watch-progress-notify-interval:
+                    pattern: \d+(us|ms|s|m|h|d)
                     type: string
                 type: object
               image:
