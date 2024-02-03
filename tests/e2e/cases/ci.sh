@@ -1,7 +1,7 @@
 ${__E2E_CASES_CI__:=false} && return 0 || __E2E_CASES_CI__=true
 
-source "$(dirname "${BASH_SOURCE[0]}")/../common/common.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/../testenv/testenv.sh"
+source "${E2E_TEST_DIR}/common/common.sh"
+source "${E2E_TEST_DIR}/testenv/testenv.sh"
 
 _TEST_CI_CLUSTER_NAME="my-xline-cluster"
 _TEST_CI_STS_NAME="$_TEST_CI_CLUSTER_NAME-sts"

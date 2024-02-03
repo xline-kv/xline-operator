@@ -1,8 +1,8 @@
 ${__E2E_TESTENV__:=false} && return 0 || __E2E_TESTENV__=true
 
-source "$(dirname "${BASH_SOURCE[0]}")/k8s/kind.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/util/util.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/../common/common.sh"
+source "${E2E_TEST_DIR}/testenv/k8s/kind.sh"
+source "${E2E_TEST_DIR}/testenv/util/util.sh"
+source "${E2E_TEST_DIR}/common/common.sh"
 
 function testenv::k8s::create() {
   testenv::k8s::kind::create
