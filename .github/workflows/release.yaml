@@ -27,7 +27,6 @@ jobs:
         run: |
           make docker-build IMG=${{ env.IMAGE_ID }}:${{ steps.generate_app_version.outputs.app_version }}
       - name: Login to GHCR
-        if: startsWith(matrix.job.platform, 'linux/')
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
