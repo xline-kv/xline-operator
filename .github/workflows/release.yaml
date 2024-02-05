@@ -19,7 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-          token: ${{ secrets.GH_TOKEN }}
           submodules: recursive
       - name: Build xline operator image
         run: |
