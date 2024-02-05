@@ -4,8 +4,6 @@ source "${E2E_TEST_DIR}/common/common.sh"
 source "${E2E_TEST_DIR}/testenv/testenv.sh"
 
 _TEST_CI_CLUSTER_NAME="my-xline-cluster"
-_TEST_CI_STS_NAME="$_TEST_CI_CLUSTER_NAME-sts"
-_TEST_CI_SVC_NAME="$_TEST_CI_CLUSTER_NAME-svc"
 _TEST_CI_SECRET_NAME="auth-cred"
 _TEST_CI_NAMESPACE="default"
 _TEST_CI_DNS_SUFFIX="svc.cluster.local"
@@ -14,9 +12,9 @@ _TEST_CI_STORAGECLASS_NAME="e2e-storage"
 _TEST_CI_LOG_SYNC_TIMEOUT=30
 
 function test::ci::_mk_endpoints() {
-  local endpoints="${_TEST_CI_STS_NAME}-0.${_TEST_CI_SVC_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+  local endpoints="${_TEST_CI_CLUSTER_NAME}-0.${_TEST_CI_CLUSTER_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   for ((i = 1; i < $1; i++)); do
-    endpoints="${endpoints},${_TEST_CI_STS_NAME}-${i}.${_TEST_CI_SVC_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
+    endpoints="${endpoints},${_TEST_CI_CLUSTER_NAME}-${i}.${_TEST_CI_CLUSTER_NAME}.${_TEST_CI_NAMESPACE}.${_TEST_CI_DNS_SUFFIX}:${_TEST_CI_XLINE_PORT}"
   done
   echo "$endpoints"
 }
@@ -84,8 +82,8 @@ function test::ci::_uninstall_CRD() {
 
 function test::ci::wait_all_xline_pod_ready() {
   for ((i = 0; i < $1; i++)); do
-    log::info "wait pod/${_TEST_CI_STS_NAME}-${i} to be ready"
-    if ! k8s::kubectl wait --for=condition=Ready pod/${_TEST_CI_STS_NAME}-${i} --timeout=300s; then
+    log::info "wait pod/${_TEST_CI_CLUSTER_NAME}-${i} to be ready"
+    if ! k8s::kubectl wait --for=condition=Ready pod/${_TEST_CI_CLUSTER_NAME}-${i} --timeout=300s; then
       log::fatal "Failed to wait for util to be ready"
     fi
   done
@@ -93,8 +91,8 @@ function test::ci::wait_all_xline_pod_ready() {
 
 function test::ci::wait_all_xline_pod_deleted() {
   for ((i = 0; i < $1; i++)); do
-    log::info "wait pod/${_TEST_CI_STS_NAME}-${i} to be ready"
-    if ! k8s::kubectl wait --for=delete pod/${_TEST_CI_STS_NAME}-${i} --timeout=300s; then
+    log::info "wait pod/${_TEST_CI_CLUSTER_NAME}-${i} to be ready"
+    if ! k8s::kubectl wait --for=delete pod/${_TEST_CI_CLUSTER_NAME}-${i} --timeout=300s; then
       log::fatal "Failed to wait for util to be ready"
     fi
   done
@@ -112,7 +110,7 @@ function test::ci::_prepare_pv() {
 
 function test::ci::_clean_pvc() {
   for ((i = 0; i < $1; i++)); do
-    local pvc_name="xline-storage-${_TEST_CI_STS_NAME}-${i}"
+    local pvc_name="xline-storage-${_TEST_CI_CLUSTER_NAME}-${i}"
     log::info "deleting pvc $pvc_name ..."
     k8s::kubectl delete pvc $pvc_name >/dev/null 2>&1
     if ! k8s::kubectl wait --for=delete pvc/${pvc_name} --timeout=300s; then
@@ -144,7 +142,7 @@ function test::ci::_start() {
   test::ci::_prepare_pv
   log::info "starting xline cluster..."
   k8s::kubectl apply -f "$(dirname "${BASH_SOURCE[0]}")/manifests/cluster.yaml" >/dev/null 2>&1
-  k8s::kubectl::wait_resource_creation sts $_TEST_CI_STS_NAME
+  k8s::kubectl::wait_resource_creation sts $_TEST_CI_CLUSTER_NAME
 }
 
 
@@ -175,7 +173,7 @@ function test::ci::_chaos() {
     kill=$((RANDOM % fault_tolerance + 1))
     log::info "chaos: kill=$kill"
     for ((j = 0; j < $kill; j++)); do
-      pod="${_TEST_CI_STS_NAME}-$((RANDOM % size))"
+      pod="${_TEST_CI_CLUSTER_NAME}-$((RANDOM % size))"
       log::info "chaos: kill pod=$pod"
       k8s::kubectl delete pod "$pod" --force --grace-period=0 2>/dev/null
     done

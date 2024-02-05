@@ -19,29 +19,16 @@ const (
 	DataDir   = "/usr/local/xline/data-dir"
 )
 
-func GetServiceKey(xlineClusterName types.NamespacedName) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: xlineClusterName.Namespace,
-		Name:      fmt.Sprintf("%s-svc", xlineClusterName.Name),
-	}
-}
-
-func GetStatefulSetKey(xlineClusterName types.NamespacedName) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: xlineClusterName.Namespace,
-		Name:      fmt.Sprintf("%s-sts", xlineClusterName.Name),
-	}
-}
-
 func GetXlineInstanceLabels(xlineClusterName types.NamespacedName) map[string]string {
 	return MakeResourceLabels(xlineClusterName.Name)
 }
 
-func GetMemberTopology(stsRef types.NamespacedName, svcName string, replicas int) string {
+func GetMemberTopology(cr *xapi.XlineCluster) string {
+	replicas := int(cr.Spec.Replicas)
 	members := make([]string, replicas)
 	for i := 0; i < replicas; i++ {
-		podName := fmt.Sprintf("%s-%d", stsRef.Name, i)
-		dnsName := fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, svcName, stsRef.Namespace)
+		podName := fmt.Sprintf("%s-%d", cr.Name, i)
+		dnsName := fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, cr.Name, cr.Namespace)
 		members[i] = fmt.Sprintf("%s=%s:%d", podName, dnsName, XlinePort)
 	}
 	return strings.Join(members, ",")
@@ -80,12 +67,11 @@ func GetAuthSecretEnvVars(auth_sec *xapi.XlineAuthSecret) []corev1.EnvVar {
 }
 
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
-	svcRef := GetServiceKey(cr.ObjKey())
 	svcLabel := GetXlineInstanceLabels(cr.ObjKey())
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      svcRef.Name,
-			Namespace: svcRef.Namespace,
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -104,9 +90,7 @@ func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service 
 
 func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.StatefulSet {
 	crName := types.NamespacedName{Namespace: cr.Namespace, Name: cr.Name}
-	stsRef := GetStatefulSetKey(crName)
 	stsLabels := GetXlineInstanceLabels(crName)
-	svcName := GetServiceKey(cr.ObjKey()).Name
 
 	initCmd := []string{
 		"xline",
@@ -118,7 +102,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 	initCmd = append(initCmd, cr.Spec.BootArgs()...)
 
 	envs := []corev1.EnvVar{
-		{Name: "MEMBERS", Value: GetMemberTopology(stsRef, svcName, int(cr.Spec.Replicas))},
+		{Name: "MEMBERS", Value: GetMemberTopology(cr)},
 		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "metadata.name",
@@ -164,13 +148,13 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 	// statefulset
 	statefulSet := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      stsRef.Name,
-			Namespace: stsRef.Namespace,
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
 			Labels:    stsLabels,
 		},
 		Spec: appv1.StatefulSetSpec{
 			Replicas:             &cr.Spec.Replicas,
-			ServiceName:          svcName,
+			ServiceName:          cr.Name,
 			Selector:             &metav1.LabelSelector{MatchLabels: stsLabels},
 			VolumeClaimTemplates: pvcTemplates,
 			Template:             podTemplate,
