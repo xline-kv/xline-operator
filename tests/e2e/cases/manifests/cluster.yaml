@@ -3,6 +3,6 @@ kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
-  image: phoenix500526/xline:v0.6.1
+  image: ghcr.io/xline-kv/xline:v0.6.1
   imagePullPolicy: IfNotPresent
   replicas: 3
