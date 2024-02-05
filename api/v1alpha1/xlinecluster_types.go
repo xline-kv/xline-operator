@@ -133,6 +133,24 @@ type XlineClusterSpec struct {
 	// The replicas of xline nodes
 	// +kubebuilder:validation:Minimum=3
 	Replicas int32 `json:"replicas"`
+
+	// The auth secret keys
+	AuthSecrets *XlineAuthSecret `json:"authSecret,omitempty"`
+
+	// K8s storage-class-name of the Xline storage
+	// Defaults to Kubernetes default storage class.
+	// +optional
+	StorageClassName *string `json:"storageClassName"`
+
+	// Defines the specification of resource cpu, mem, storage.
+	corev1.ResourceRequirements `json:",inline"`
+}
+
+type XlineAuthSecret struct {
+	Name      *string `json:"name"`
+	MountPath *string `json:"mountPath"`
+	PubKey    *string `json:"pubKey"`
+	PriKey    *string `json:"priKey"`
 }
 
 func (s *XlineClusterSpec) BootArgs() []string {

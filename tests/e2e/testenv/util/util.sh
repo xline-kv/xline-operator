@@ -46,15 +46,49 @@ function testenv::util::uninstall() {
 }
 
 function testenv::util::etcdctl() {
-  # shellcheck disable=SC2034
-  local KUBECTL_NAMESPACE="${_UTIL_NAMESPACE}"
+  echo -e "kubectl exec -n util -i etcdctl -- env ETCDCTL_API=3 etcdctl --endpoints=$1"
+}
 
+function testenv::util::run_with_expect() {
+  cmd="$1"
+  expect=$(echo -e ${2})
   # retry to avoid mysterious "Error from server: error dialing backend: EOF" error
-  for ((i = 0; i < ${RETRY_TIMES:-10}; i++)); do
-    if output=$(k8s::kubectl exec -i etcdctl -- env ETCDCTL_API=3 etcdctl $@ 2>&1); then
-      echo -e "$output"
-      return
+  for ((k = 0; k < ${RETRY_TIMES:-10}; k++)); do
+    output=$(eval ${cmd} 2>&1)
+    if [[ $output == *"timed out"* || $output == *"Request timeout"* || $output == *"context deadline exceeded"* ]]; then
+      sleep "${RETRY_INTERVAL:-3}"
+    elif [ "${output//$'\r'/}" == "$expect" ]; then
+      log::info "command $cmd run success"
+      return 0
+    else
+      log::error "command $cmd run failed"
+      log::error "expect: $expect"
+      log::error "got: $output"
+      return 1
     fi
-    sleep "${RETRY_INTERVAL:-3}"
+  done
+}
+
+# run a command with expect output, based on key word match
+# args:
+#   $1: command to run
+#   $2: key word to match
+function testenv::util::run_with_match() {
+  cmd="$1"
+  expect=$(echo -e ${2})
+  # retry to avoid mysterious "Error from server: error dialing backend: EOF" error
+  for ((n = 0; n < ${RETRY_TIMES:-10}; n++)); do
+    output=$(eval ${cmd} 2>&1)
+    if [[ $output == *"timed out"* || $output == *"Request timeout"* || $output == *"context deadline exceeded"* ]]; then
+      sleep "${RETRY_INTERVAL:-3}"
+    elif echo "${output}" | grep -q "${expect}"; then
+      log::info "command $cmd run success"
+      return 0
+    else
+      log::error "command $cmd run failed"
+      log::error "expect: $expect"
+      log::error "got: $output"
+      return 1
+    fi
   done
 }
