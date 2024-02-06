@@ -14,6 +14,5 @@ spec:
     mountPath: /tmp/auth-cred
     pubKey: auth-jwt.pub
     priKey: auth-jwt.pri
-  bootstrapArgs:
-    auth-private-key: /tmp/auth-cred/auth-jwt.pri
-    auth-public-key: /tmp/auth-cred/auth-jwt.pub
+  config:
+    ClientUseBackoff: true
