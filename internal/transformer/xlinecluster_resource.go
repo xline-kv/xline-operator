@@ -16,7 +16,6 @@ import (
 
 const (
 	XlinePort = 2379
-	DataDir   = "/usr/local/xline/data-dir"
 )
 
 func GetXlineInstanceLabels(xlineClusterName types.NamespacedName) map[string]string {
@@ -34,36 +33,22 @@ func GetMemberTopology(cr *xapi.XlineCluster) string {
 	return strings.Join(members, ",")
 }
 
-func GetAuthSecretVolume(auth_sec *xapi.XlineAuthSecret) []corev1.Volume {
+func getAuthInfo(auth_sec *xapi.XlineAuthSecret) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar) {
 	if auth_sec == nil {
-		return []corev1.Volume{}
+		return []corev1.Volume{}, []corev1.VolumeMount{}, []corev1.EnvVar{}
 	}
 	return []corev1.Volume{
-		{Name: "auth-cred", VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: *auth_sec.Name,
-			},
-		}},
-	}
-}
-
-func GetAuthSecretVolumeMount(auth_sec *xapi.XlineAuthSecret) []corev1.VolumeMount {
-	if auth_sec == nil {
-		return []corev1.VolumeMount{}
-	}
-	return []corev1.VolumeMount{
-		{Name: "auth-cred", ReadOnly: true, MountPath: *auth_sec.MountPath},
-	}
-}
-
-func GetAuthSecretEnvVars(auth_sec *xapi.XlineAuthSecret) []corev1.EnvVar {
-	if auth_sec == nil {
-		return []corev1.EnvVar{}
-	}
-	return []corev1.EnvVar{
-		{Name: "AUTH_PUBLIC_KEY", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PubKey)},
-		{Name: "AUTH_PRIVATE_KEY", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PriKey)},
-	}
+			{Name: "auth-cred", VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: *auth_sec.Name,
+				},
+			}},
+		}, []corev1.VolumeMount{
+			{Name: "auth-cred", ReadOnly: true, MountPath: *auth_sec.MountPath},
+		}, []corev1.EnvVar{
+			{Name: "AuthPublicKey", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PubKey)},
+			{Name: "AuthPrivateKey", Value: fmt.Sprintf("%s/%s", *auth_sec.MountPath, *auth_sec.PriKey)},
+		}
 }
 
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
@@ -88,32 +73,52 @@ func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service 
 	return service
 }
 
+func MakeScriptCM(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-script", cr.Name),
+			Namespace: cr.Namespace,
+			Labels:    GetXlineInstanceLabels(cr.ObjKey()),
+		},
+		Data: map[string]string{
+			"startup-script": XlineStartScript,
+		},
+	}
+	_ = controllerutil.SetOwnerReference(cr, cm, scheme)
+	return cm
+}
+
 func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.StatefulSet {
 	crName := types.NamespacedName{Namespace: cr.Namespace, Name: cr.Name}
 	stsLabels := GetXlineInstanceLabels(crName)
 
-	initCmd := []string{
-		"xline",
-		"--name", "$(POD_NAME)",
-		"--members", "$(MEMBERS)",
-		"--storage-engine", "rocksdb",
-		"--data-dir", DataDir,
-	}
-	initCmd = append(initCmd, cr.Spec.BootArgs()...)
-
 	envs := []corev1.EnvVar{
 		{Name: "MEMBERS", Value: GetMemberTopology(cr)},
-		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: "metadata.name",
-			},
-		}},
 	}
-	envs = append(envs, GetAuthSecretEnvVars(cr.Spec.AuthSecrets)...)
 
-	volumes := GetAuthSecretVolume(cr.Spec.AuthSecrets)
-	volumeMounts := GetAuthSecretVolumeMount(cr.Spec.AuthSecrets)
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "xline-storage", MountPath: "/usr/local/xline/data-dir"})
+	volumes := []corev1.Volume{
+		{
+			Name: "startup-script",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-script", cr.Name),
+					},
+					Items: []corev1.KeyToPath{{Key: "startup-script", Path: "xline_start_script.sh"}},
+				},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{Name: "xline-storage", MountPath: DataDir},
+		{Name: "startup-script", ReadOnly: true, MountPath: "/usr/local/script"},
+	}
+
+	authVol, authVM, authEnvs := getAuthInfo(cr.Spec.AuthSecrets)
+	volumes = append(volumes, authVol...)
+	volumeMounts = append(volumeMounts, authVM...)
+	envs = append(envs, authEnvs...)
 
 	pvcTemplates := []corev1.PersistentVolumeClaim{
 		util.NewReadWriteOncePVC("xline-storage", cr.Spec.StorageClassName, cr.Spec.Requests.Storage()),
@@ -127,7 +132,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Ports: []corev1.ContainerPort{
 			{Name: "xline-port", ContainerPort: XlinePort},
 		},
-		Command:      initCmd,
+		Command:      []string{"/bin/bash", "/usr/local/script/xline_start_script.sh"},
 		Env:          envs,
 		VolumeMounts: volumeMounts,
 	}

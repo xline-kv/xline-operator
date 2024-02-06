@@ -52,109 +52,6 @@ spec:
                 - priKey
                 - pubKey
                 type: object
-              bootstrapArgs:
-                description: / Xline container bootstrap arguments / Set additional
-                  arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
-                properties:
-                  auth-private-key:
-                    type: string
-                  auth-public-key:
-                    type: string
-                  batch-max-size:
-                    pattern: \d+(B|MB|GB)
-                    type: string
-                  batch-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  candidate-timeout-ticks:
-                    minimum: 1
-                    type: integer
-                  client-initial-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  client-max-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  client-propose-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  client-use-backoff:
-                    type: boolean
-                  client-wait-synced-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  cmd-workers:
-                    minimum: 1
-                    type: integer
-                  compact-batch-size:
-                    minimum: 1
-                    type: integer
-                  compact-sleep-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  compact-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  curp-dir:
-                    type: string
-                  follower-timeout-ticks:
-                    minimum: 1
-                    type: integer
-                  gc-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  heartbeat-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  jaeger-level:
-                    type: boolean
-                  jaeger-offline:
-                    type: boolean
-                  jaeger-online:
-                    type: boolean
-                  jaeger-output-dir:
-                    type: string
-                  log-entries-cap:
-                    minimum: 1
-                    type: integer
-                  log-file:
-                    type: string
-                  log-level:
-                    enum:
-                    - "off"
-                    - info
-                    - error
-                    - warn
-                    - trace
-                    - debug
-                    type: string
-                  log-rotate:
-                    type: string
-                  quota:
-                    minimum: 1
-                    type: integer
-                  range-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  retry-count:
-                    minimum: 1
-                    type: integer
-                  retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  rpc-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  server-wait-synced-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  sync-victims-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  watch-progress-notify-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                type: object
               claims:
                 description: "Claims lists the names of resources, defined in spec.resourceClaims,
                   that are used by this container. \n This is an alpha field and requires
@@ -175,6 +72,108 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              config:
+                description: / Xline container bootstrap arguments / Set additional
+                  arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
+                properties:
+                  BatchMaxSize:
+                    pattern: \d+(KB|MB|kb|mb)
+                    type: string
+                  BatchTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  CandidateTimeoutTicks:
+                    minimum: 1
+                    type: integer
+                  ClientInitialRetryTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  ClientMaxRetryTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  ClientProposeTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  ClientUseBackoff:
+                    type: boolean
+                  ClientWaitSyncedTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  CmdWorkers:
+                    minimum: 1
+                    type: integer
+                  CompactBatchSize:
+                    minimum: 1
+                    type: integer
+                  CompactSleepInterval:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  CompactTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  CurpDir:
+                    type: string
+                  FollowerTimeoutTicks:
+                    minimum: 1
+                    type: integer
+                  GcInterval:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  HeartbeatInterval:
+                    pattern: \d+(us|ms)
+                    type: string
+                  JaegerLevel:
+                    type: string
+                  JaegerOffline:
+                    type: boolean
+                  JaegerOnline:
+                    type: boolean
+                  JaegerOutputDir:
+                    type: string
+                  LogEntriesCap:
+                    minimum: 1
+                    type: integer
+                  LogFile:
+                    type: string
+                  LogLevel:
+                    enum:
+                    - trace
+                    - debug
+                    - info
+                    - warn
+                    - error
+                    type: string
+                  LogRotate:
+                    enum:
+                    - never
+                    - hourly
+                    - daily
+                    type: string
+                  Quota:
+                    minimum: 1
+                    type: integer
+                  RangeRetryTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  RetryCount:
+                    minimum: 1
+                    type: integer
+                  RetryTimeout:
+                    pattern: \d+(ms|s)
+                    type: string
+                  RpcTimeout:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  ServerWaitSyncedTimeout:
+                    pattern: \d+(ms|s)
+                    type: string
+                  SyncVictimsInterval:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                  WatchProgressNotifyInterval:
+                    pattern: \d+(us|ms|s)
+                    type: string
+                type: object
               image:
                 description: Xline cluster image
                 type: string
