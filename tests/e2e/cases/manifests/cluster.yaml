@@ -15,4 +15,4 @@ spec:
     pubKey: auth-jwt.pub
     priKey: auth-jwt.pri
   config:
-    ClientUseBackoff: true
+    LogLevel: debug

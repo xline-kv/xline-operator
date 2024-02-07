@@ -124,7 +124,7 @@ type XlineClusterSpec struct {
 
 	/// Xline container bootstrap arguments
 	/// Set additional arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
-	BootstrapArgs XlineArgs `json:"config,omitempty"`
+	BootstrapArgs *XlineArgs `json:"config,omitempty"`
 
 	// ImagePullPolicy of Xline cluster Pods
 	// +optional
@@ -153,9 +153,9 @@ type XlineAuthSecret struct {
 	PriKey    *string `json:"priKey"`
 }
 
-func (s *XlineClusterSpec) BootArgs() []string {
+func (s *XlineClusterSpec) BootArgs() map[string]string {
 	bytes, err := json.Marshal(s.BootstrapArgs)
-	args := make([]string, 0)
+	args := map[string]string{}
 	if err != nil {
 		return args
 	}
@@ -164,11 +164,7 @@ func (s *XlineClusterSpec) BootArgs() []string {
 		return args
 	}
 	for k, v := range data {
-		if bv, ok := v.(bool); ok && bv {
-			args = append(args, fmt.Sprintf("--%s", k))
-			continue
-		}
-		args = append(args, fmt.Sprintf("--%s", k), fmt.Sprintf("%v", v))
+		args[k] = fmt.Sprintf("%v", v)
 	}
 	return args
 }
@@ -185,6 +181,7 @@ type XlineClusterOprStage string
 
 const (
 	StageXlineScriptCM    XlineClusterOprStage = "Xline/ScriptCM"
+	StageXlineConfigMap   XlineClusterOprStage = "Xline/ConfigMap"
 	StageXlineService     XlineClusterOprStage = "Xline/Service"
 	StageXlineStatefulSet XlineClusterOprStage = "Xline/Statefulset"
 	StageComplete         XlineClusterOprStage = "complete"

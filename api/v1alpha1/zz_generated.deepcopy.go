@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"k8s.io/api/apps/v1"
+	v1 "k8s.io/api/apps/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -288,7 +288,11 @@ func (in *XlineClusterSpec) DeepCopyInto(out *XlineClusterSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	in.BootstrapArgs.DeepCopyInto(&out.BootstrapArgs)
+	if in.BootstrapArgs != nil {
+		in, out := &in.BootstrapArgs, &out.BootstrapArgs
+		*out = new(XlineArgs)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.AuthSecrets != nil {
 		in, out := &in.AuthSecrets, &out.AuthSecrets
 		*out = new(XlineAuthSecret)
