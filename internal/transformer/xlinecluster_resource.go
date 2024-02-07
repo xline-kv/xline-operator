@@ -51,6 +51,19 @@ func getAuthInfo(auth_sec *xapi.XlineAuthSecret) ([]corev1.Volume, []corev1.Volu
 		}
 }
 
+func getConfigInfo(cr *xapi.XlineCluster) []corev1.EnvFromSource {
+	if cr.Spec.BootstrapArgs == nil {
+		return []corev1.EnvFromSource{}
+	}
+	return []corev1.EnvFromSource{
+		{ConfigMapRef: &corev1.ConfigMapEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: fmt.Sprintf("%s-config", cr.Name),
+			},
+		}},
+	}
+}
+
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
 	svcLabel := GetXlineInstanceLabels(cr.ObjKey())
 	service := &corev1.Service{
@@ -83,6 +96,19 @@ func MakeScriptCM(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.ConfigM
 		Data: map[string]string{
 			"startup-script": XlineStartScript,
 		},
+	}
+	_ = controllerutil.SetOwnerReference(cr, cm, scheme)
+	return cm
+}
+
+func MakeConfigMap(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-config", cr.Name),
+			Namespace: cr.Namespace,
+			Labels:    GetXlineInstanceLabels(cr.ObjKey()),
+		},
+		Data: cr.Spec.BootArgs(),
 	}
 	_ = controllerutil.SetOwnerReference(cr, cm, scheme)
 	return cm
@@ -134,6 +160,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		},
 		Command:      []string{"/bin/bash", "/usr/local/script/xline_start_script.sh"},
 		Env:          envs,
+		EnvFrom:      getConfigInfo(cr),
 		VolumeMounts: volumeMounts,
 	}
 
