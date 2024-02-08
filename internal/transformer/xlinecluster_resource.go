@@ -11,15 +11,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
-	XlinePort = 2379
+	XlinePort     = 2379
+	DiscoveryPort = 10086
 )
 
 func GetXlineInstanceLabels(xlineClusterName types.NamespacedName) map[string]string {
 	return MakeResourceLabels(xlineClusterName.Name)
+}
+
+func GetXlineDiscoveryLabels(xlineClusterName types.NamespacedName) map[string]string {
+	return MakeResourceLabels(fmt.Sprintf("%s-discovery", xlineClusterName.Name))
 }
 
 func GetMemberTopology(cr *xapi.XlineCluster) string {
@@ -62,6 +68,73 @@ func getConfigInfo(cr *xapi.XlineCluster) []corev1.EnvFromSource {
 			},
 		}},
 	}
+}
+
+func MakeDiscoveryService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {
+	svcLabel := GetXlineDiscoveryLabels(cr.ObjKey())
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-discovery", cr.Name),
+			Namespace: cr.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name: "discovery-port",
+					Port: DiscoveryPort,
+				},
+			},
+			Selector: svcLabel,
+		},
+	}
+	_ = controllerutil.SetOwnerReference(cr, service, scheme)
+	return service
+}
+
+func MakeDiscoveryDeployment(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.Deployment {
+	discoveryLabel := GetXlineDiscoveryLabels(cr.ObjKey())
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Name:  "xline-discovery",
+				Image: "phoenix500526/discovery:v0.1.1",
+				Command: []string{
+					"/usr/local/bin/discovery",
+				},
+				Ports: []corev1.ContainerPort{
+					{
+						ContainerPort: DiscoveryPort,
+					},
+				},
+				Env: []corev1.EnvVar{
+					{Name: "XC_NAME", Value: cr.Name},
+				},
+			},
+		},
+		// ServiceAccountName: "my-service-account",
+	}
+
+	deploy := &appv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
+		},
+		Spec: appv1.DeploymentSpec{
+			Replicas: pointer.Int32(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: discoveryLabel,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: discoveryLabel,
+				},
+				Spec: podSpec,
+			},
+		},
+	}
+
+	_ = controllerutil.SetOwnerReference(cr, deploy, scheme)
+	return deploy
 }
 
 func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service {

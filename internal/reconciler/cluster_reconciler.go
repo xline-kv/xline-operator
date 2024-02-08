@@ -68,6 +68,18 @@ func (r *ClusterStageRecResult) AsXlineClusterRecStatus() xapi.XlineClusterRecSt
 
 // reconcile xline cluster resources.
 func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
+	// create an xline discovery service
+	discoverySvc := tran.MakeDiscoveryService(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoverySvc, &corev1.Service{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryService, err)
+	}
+
+	// create an xline discovery deployment
+	discoveryDeploy := tran.MakeDiscoveryDeployment(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoveryDeploy, &appv1.Deployment{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryDeploy, err)
+	}
+
 	// create an xline script cm
 	script := tran.MakeScriptCM(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(script, &corev1.ConfigMap{}); err != nil {
