@@ -20,9 +20,11 @@ package reconciler
 
 import (
 	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
+	"github.com/xline-kv/xline-operator/internal/constants"
 	tran "github.com/xline-kv/xline-operator/internal/transformer"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // XlineClusterReconciler reconciles a XlineCluster object
@@ -75,7 +77,13 @@ func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
 	}
 
 	// create an xline discovery deployment
-	discoveryDeploy := tran.MakeDiscoveryDeployment(r.CR, r.Schema)
+	mgrDeployName := types.NamespacedName{Name: constants.OperatorDeployName, Namespace: constants.OperatorNamespace}
+	mgrDeploy := &appv1.Deployment{}
+	if err := r.Get(r.Ctx, mgrDeployName, mgrDeploy); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryDeploy, err)
+	}
+	discoveryImage := mgrDeploy.Spec.Template.Spec.Containers[1].Image
+	discoveryDeploy := tran.MakeDiscoveryDeployment(r.CR, r.Schema, discoveryImage)
 	if err := r.CreateOrUpdate(discoveryDeploy, &appv1.Deployment{}); err != nil {
 		return clusterStageFail(xapi.StageXlineDiscoveryDeploy, err)
 	}

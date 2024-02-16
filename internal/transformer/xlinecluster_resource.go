@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
+	"github.com/xline-kv/xline-operator/internal/constants"
 	"github.com/xline-kv/xline-operator/internal/util"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,11 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-)
-
-const (
-	XlinePort     = 2379
-	DiscoveryPort = 10086
 )
 
 func GetXlineInstanceLabels(xlineClusterName types.NamespacedName) map[string]string {
@@ -34,7 +30,7 @@ func GetMemberTopology(cr *xapi.XlineCluster) string {
 	for i := 0; i < replicas; i++ {
 		podName := fmt.Sprintf("%s-%d", cr.Name, i)
 		dnsName := fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, cr.Name, cr.Namespace)
-		members[i] = fmt.Sprintf("%s=%s:%d", podName, dnsName, XlinePort)
+		members[i] = fmt.Sprintf("%s=%s:%d", podName, dnsName, constants.XlinePort)
 	}
 	return strings.Join(members, ",")
 }
@@ -81,7 +77,7 @@ func MakeDiscoveryService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1
 			Ports: []corev1.ServicePort{
 				{
 					Name: "discovery-port",
-					Port: DiscoveryPort,
+					Port: constants.DiscoveryPort,
 				},
 			},
 			Selector: svcLabel,
@@ -91,19 +87,19 @@ func MakeDiscoveryService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1
 	return service
 }
 
-func MakeDiscoveryDeployment(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.Deployment {
+func MakeDiscoveryDeployment(cr *xapi.XlineCluster, scheme *runtime.Scheme, image string) *appv1.Deployment {
 	discoveryLabel := GetXlineDiscoveryLabels(cr.ObjKey())
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
 			{
 				Name:  "xline-discovery",
-				Image: "phoenix500526/discovery:v0.1.1",
+				Image: image,
 				Command: []string{
-					"/usr/local/bin/discovery",
+					"/discovery",
 				},
 				Ports: []corev1.ContainerPort{
 					{
-						ContainerPort: DiscoveryPort,
+						ContainerPort: constants.DiscoveryPort,
 					},
 				},
 				Env: []corev1.EnvVar{
@@ -148,7 +144,7 @@ func MakeService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.Service 
 			Ports: []corev1.ServicePort{
 				{
 					Name: "xline-port",
-					Port: XlinePort,
+					Port: constants.XlinePort,
 				},
 			},
 			Selector:  svcLabel,
@@ -229,7 +225,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 		Image:           *cr.Spec.Image,
 		ImagePullPolicy: cr.Spec.ImagePullPolicy,
 		Ports: []corev1.ContainerPort{
-			{Name: "xline-port", ContainerPort: XlinePort},
+			{Name: "xline-port", ContainerPort: constants.XlinePort},
 		},
 		Command:      []string{"/bin/bash", "/usr/local/script/xline_start_script.sh"},
 		Env:          envs,
