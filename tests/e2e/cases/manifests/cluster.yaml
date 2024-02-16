@@ -6,3 +6,14 @@ spec:
   image: phoenix500526/xline:v0.6.1
   imagePullPolicy: IfNotPresent
   replicas: 3
+  storageClassName: "e2e-storage"
+  requests:
+    storage: 500Mi
+  authSecret:
+    name: auth-cred
+    mountPath: /tmp/auth-cred
+    pubKey: auth-jwt.pub
+    priKey: auth-jwt.pri
+  bootstrapArgs:
+    auth-private-key: /tmp/auth-cred/auth-jwt.pri
+    auth-public-key: /tmp/auth-cred/auth-jwt.pub

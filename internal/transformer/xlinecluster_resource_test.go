@@ -23,34 +23,17 @@ func TestXlineClusterFunc(t *testing.T) {
 		},
 	}
 
-	t.Run("GetServiceKey should work properly", func(t *testing.T) {
-		xcLookupKey := xlineCluster.ObjKey()
-		svcObj := GetServiceKey(xcLookupKey)
-		assert.Equal(t, svcObj.Namespace, "default")
-		assert.Equal(t, svcObj.Name, "xline-svc")
-	})
-
-	t.Run("GetStatefulSetKey should work properly", func(t *testing.T) {
-		xcLookupKey := xlineCluster.ObjKey()
-		stsObj := GetStatefulSetKey(xcLookupKey)
-		assert.Equal(t, stsObj.Namespace, "default")
-		assert.Equal(t, stsObj.Name, "xline-sts")
-	})
-
 	t.Run("GetXlineImage should work properly", func(t *testing.T) {
 		xlineImage := *xlineCluster.Spec.Image
 		assert.Equal(t, xlineImage, "xline-img:latest")
 	})
 
 	t.Run("GetMemberTopology should work properly", func(t *testing.T) {
-		xcLookupKey := xlineCluster.ObjKey()
-		stsRef := GetStatefulSetKey(xcLookupKey)
-		svcName := GetServiceKey(xcLookupKey).Name
-		topology := GetMemberTopology(stsRef, svcName, 3)
+		topology := GetMemberTopology(&xlineCluster)
 		topologyVec := strings.Split(topology, ",")
 		assert.Equal(t, len(topologyVec), 3)
 		for i := 0; i < 3; i++ {
-			expectRes := fmt.Sprintf("xline-sts-%d=xline-sts-%d.xline-svc.default.svc.cluster.local:2379", i, i)
+			expectRes := fmt.Sprintf("xline-%d=xline-%d.xline.default.svc.cluster.local:2379", i, i)
 			assert.Equal(t, topologyVec[i], expectRes)
 		}
 	})
