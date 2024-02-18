@@ -9,6 +9,7 @@ import (
 	"github.com/xline-kv/xline-operator/internal/util"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,6 +88,59 @@ func MakeDiscoveryService(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1
 	return service
 }
 
+func MakeDiscoverySA(cr *xapi.XlineCluster, scheme *runtime.Scheme) *corev1.ServiceAccount {
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "xline-discovery",
+			Namespace: cr.Namespace,
+			Labels:    GetXlineDiscoveryLabels(cr.ObjKey()),
+		},
+	}
+	_ = controllerutil.SetOwnerReference(cr, sa, scheme)
+	return sa
+}
+
+func MakeDiscoveryRole(cr *xapi.XlineCluster, scheme *runtime.Scheme) *rbacv1.Role {
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "xline-discovery-role",
+			Namespace: cr.Namespace,
+			Labels:    GetXlineDiscoveryLabels(cr.ObjKey()),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{corev1.GroupName},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+
+	_ = controllerutil.SetOwnerReference(cr, role, scheme)
+	return role
+}
+
+func MakeDiscoveryRoleBinding(cr *xapi.XlineCluster, scheme *runtime.Scheme) *rbacv1.RoleBinding {
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "xline-discovery-rolebinding",
+			Namespace: cr.Namespace,
+			Labels:    GetXlineDiscoveryLabels(cr.ObjKey()),
+		},
+		Subjects: []rbacv1.Subject{{
+			Kind: rbacv1.ServiceAccountKind,
+			Name: "xline-discovery",
+		}},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "Role",
+			Name:     "xline-discovery-role",
+			APIGroup: rbacv1.GroupName,
+		},
+	}
+	_ = controllerutil.SetOwnerReference(cr, rb, scheme)
+	return rb
+}
+
 func MakeDiscoveryDeployment(cr *xapi.XlineCluster, scheme *runtime.Scheme, image string) *appv1.Deployment {
 	discoveryLabel := GetXlineDiscoveryLabels(cr.ObjKey())
 	podSpec := corev1.PodSpec{
@@ -104,10 +158,11 @@ func MakeDiscoveryDeployment(cr *xapi.XlineCluster, scheme *runtime.Scheme, imag
 				},
 				Env: []corev1.EnvVar{
 					{Name: "XC_NAME", Value: cr.Name},
+					{Name: "NAMESPACE", Value: cr.Namespace},
 				},
 			},
 		},
-		// ServiceAccountName: "my-service-account",
+		ServiceAccountName: "xline-discovery",
 	}
 
 	deploy := &appv1.Deployment{

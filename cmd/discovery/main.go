@@ -35,13 +35,21 @@ func main() {
 
 	xcName := os.Getenv("XC_NAME")
 	if len(xcName) < 1 {
-		zap.L().Fatal("ENV XC_NAME is not set")
+		zap.S().Fatal("ENV XC_NAME is not set")
+	}
+
+	ns := os.Getenv("NAMESPACE")
+	if len(ns) < 1 {
+		zap.S().Fatal("ENV NAMESPACE is not set")
 	}
 
 	go func() {
 		addr := fmt.Sprintf("0.0.0.0:%d", port)
 		zap.S().Infof("starting Xline Discovery server, listening on %s", addr)
-		discoveryServer := server.NewServer()
+		discoveryServer, err := server.NewServer(ns, xcName)
+		if err != nil {
+			zap.S().Fatal("cannot create k8s client: %s", err)
+		}
 		discoveryServer.ListenAndServe(addr)
 	}()
 

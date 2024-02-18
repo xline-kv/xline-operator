@@ -24,6 +24,7 @@ import (
 	tran "github.com/xline-kv/xline-operator/internal/transformer"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -74,6 +75,24 @@ func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
 	discoverySvc := tran.MakeDiscoveryService(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(discoverySvc, &corev1.Service{}); err != nil {
 		return clusterStageFail(xapi.StageXlineDiscoveryService, err)
+	}
+
+	// create an xline discovery serviceaccount
+	discoverySa := tran.MakeDiscoverySA(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoverySa, &corev1.ServiceAccount{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoverySA, err)
+	}
+
+	// create an xline discovery role
+	discoveryRole := tran.MakeDiscoveryRole(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoveryRole, &rbacv1.Role{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryRole, err)
+	}
+
+	// create a rolebinding for xline discovery
+	discoveryRB := tran.MakeDiscoveryRoleBinding(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoveryRB, &rbacv1.RoleBinding{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryRoleBinding, err)
 	}
 
 	// create an xline discovery deployment

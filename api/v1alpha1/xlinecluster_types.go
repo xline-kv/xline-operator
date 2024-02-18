@@ -180,13 +180,16 @@ type XlineClusterStatus struct {
 type XlineClusterOprStage string
 
 const (
-	StageXlineScriptCM         XlineClusterOprStage = "Xline/ScriptCM"
-	StageXlineConfigMap        XlineClusterOprStage = "Xline/ConfigMap"
-	StageXlineService          XlineClusterOprStage = "Xline/Service"
-	StageXlineDiscoveryService XlineClusterOprStage = "Xline/DiscoveryService"
-	StageXlineDiscoveryDeploy  XlineClusterOprStage = "Xline/DiscoveryDeploy"
-	StageXlineStatefulSet      XlineClusterOprStage = "Xline/Statefulset"
-	StageComplete              XlineClusterOprStage = "complete"
+	StageXlineScriptCM             XlineClusterOprStage = "Xline/ScriptCM"
+	StageXlineConfigMap            XlineClusterOprStage = "Xline/ConfigMap"
+	StageXlineService              XlineClusterOprStage = "Xline/Service"
+	StageXlineDiscoveryService     XlineClusterOprStage = "Xline/DiscoveryService"
+	StageXlineDiscoverySA          XlineClusterOprStage = "Xline/DiscoverySA"
+	StageXlineDiscoveryRole        XlineClusterOprStage = "Xline/DiscoveryRole"
+	StageXlineDiscoveryRoleBinding XlineClusterOprStage = "Xline/DiscoveryRoleBinding"
+	StageXlineDiscoveryDeploy      XlineClusterOprStage = "Xline/DiscoveryDeploy"
+	StageXlineStatefulSet          XlineClusterOprStage = "Xline/Statefulset"
+	StageComplete                  XlineClusterOprStage = "complete"
 )
 
 // XlineClusterRecStatus represents XlineCluster reconcile status
