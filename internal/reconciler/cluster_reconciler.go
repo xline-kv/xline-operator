@@ -20,9 +20,12 @@ package reconciler
 
 import (
 	xapi "github.com/xline-kv/xline-operator/api/v1alpha1"
+	"github.com/xline-kv/xline-operator/internal/constants"
 	tran "github.com/xline-kv/xline-operator/internal/transformer"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // XlineClusterReconciler reconciles a XlineCluster object
@@ -68,12 +71,58 @@ func (r *ClusterStageRecResult) AsXlineClusterRecStatus() xapi.XlineClusterRecSt
 
 // reconcile xline cluster resources.
 func (r *XlineClusterReconciler) recXlineResources() ClusterStageRecResult {
-	// create a xline service
+	// create an xline discovery service
+	discoverySvc := tran.MakeDiscoveryService(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoverySvc, &corev1.Service{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryService, err)
+	}
+
+	// create an xline discovery serviceaccount
+	discoverySa := tran.MakeDiscoverySA(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoverySa, &corev1.ServiceAccount{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoverySA, err)
+	}
+
+	// create an xline discovery role
+	discoveryRole := tran.MakeDiscoveryRole(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoveryRole, &rbacv1.Role{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryRole, err)
+	}
+
+	// create a rolebinding for xline discovery
+	discoveryRB := tran.MakeDiscoveryRoleBinding(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(discoveryRB, &rbacv1.RoleBinding{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryRoleBinding, err)
+	}
+
+	// create an xline discovery deployment
+	mgrDeployName := types.NamespacedName{Name: constants.OperatorDeployName, Namespace: constants.OperatorNamespace}
+	mgrDeploy := &appv1.Deployment{}
+	if err := r.Get(r.Ctx, mgrDeployName, mgrDeploy); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryDeploy, err)
+	}
+	discoveryImage := mgrDeploy.Spec.Template.Spec.Containers[1].Image
+	discoveryDeploy := tran.MakeDiscoveryDeployment(r.CR, r.Schema, discoveryImage)
+	if err := r.CreateOrUpdate(discoveryDeploy, &appv1.Deployment{}); err != nil {
+		return clusterStageFail(xapi.StageXlineDiscoveryDeploy, err)
+	}
+
+	// create an xline script cm
+	script := tran.MakeScriptCM(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(script, &corev1.ConfigMap{}); err != nil {
+		return clusterStageFail(xapi.StageXlineScriptCM, err)
+	}
+	// create an xline configmap
+	configMap := tran.MakeConfigMap(r.CR, r.Schema)
+	if err := r.CreateOrUpdate(configMap, &corev1.ConfigMap{}); err != nil {
+		return clusterStageFail(xapi.StageXlineConfigMap, err)
+	}
+	// create an xline service
 	service := tran.MakeService(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(service, &corev1.Service{}); err != nil {
 		return clusterStageFail(xapi.StageXlineService, err)
 	}
-	// create a xline statefulset
+	// create an xline statefulset
 	statefulSet := tran.MakeStatefulSet(r.CR, r.Schema)
 	if err := r.CreateOrUpdate(statefulSet, &appv1.StatefulSet{}); err != nil {
 		return clusterStageFail(xapi.StageXlineStatefulSet, err)

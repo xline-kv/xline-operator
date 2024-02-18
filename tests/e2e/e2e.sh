@@ -2,9 +2,15 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/common/common.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/testenv/testenv.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/cases/cases.sh"
+__ABS_PATH__=$(realpath ${BASH_SOURCE[0]})
+export E2E_TEST_DIR=$(dirname ${__ABS_PATH__})
+export CODE_BASE_DIR=$(dirname $(dirname ${E2E_TEST_DIR}))
+export OPERATOR_IMG="ghcr.io/xline-kv/xline-operator:$(git rev-parse --short HEAD)"
+export OPERATOR_NS="xline-operator-system"
+
+source "${E2E_TEST_DIR}/common/common.sh"
+source "${E2E_TEST_DIR}/testenv/testenv.sh"
+source "${E2E_TEST_DIR}/cases/cases.sh"
 
 function setup() {
   testenv::k8s::create
