@@ -3,6 +3,16 @@ kind: XlineCluster
 metadata:
   name: my-xline-cluster
 spec:
-  image: phoenix500526/xline:v0.6.1
+  image: phoenix500526/xline:v0.7.0
   imagePullPolicy: IfNotPresent
   replicas: 3
+  storageClassName: "e2e-storage"
+  requests:
+    storage: 500Mi
+  authSecret:
+    name: auth-cred
+    mountPath: /tmp/auth-cred
+    pubKey: auth-jwt.pub
+    priKey: auth-jwt.pri
+  config:
+    LogLevel: debug

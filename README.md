@@ -58,9 +58,9 @@ my-xline-cluster   -
 # Get Xline pod
 $ kubectl get pods
 NAME                     READY   STATUS    RESTARTS   AGE
-my-xline-cluster-sts-0   1/1     Running   0          -
-my-xline-cluster-sts-1   1/1     Running   0          -
-my-xline-cluster-sts-2   1/1     Running   0          -
+my-xline-cluster-0   1/1     Running   0          -
+my-xline-cluster-1   1/1     Running   0          -
+my-xline-cluster-2   1/1     Running   0          -
 ```
 
 ### Delete the xline cluster

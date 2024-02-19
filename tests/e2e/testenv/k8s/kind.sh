@@ -3,7 +3,7 @@ ${__E2E_TESTENV_KIND__:=false} && return 0 || __E2E_TESTENV_KIND__=true
 _TEST_ENV_KIND_CLUSTER_NAME="e2e-kind"
 _DEFAULT_KIND_IMAGE="kindest/node:v1.27.3"
 
-source "$(dirname "${BASH_SOURCE[0]}")/../../common/common.sh"
+source "${E2E_TEST_DIR}/common/common.sh"
 
 function testenv::k8s::kind::_cluster_exists() {
   kind get clusters -q | grep -w -q "${_TEST_ENV_KIND_CLUSTER_NAME}"

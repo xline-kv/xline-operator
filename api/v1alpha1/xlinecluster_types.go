@@ -51,65 +51,65 @@ type XlineClusterList struct {
 }
 
 type XlineArgs struct {
-	JaegerOffline    bool    `json:"jaeger-offline,omitempty"`
-	JaegerOnline     bool    `json:"jaeger-online,omitempty"`
-	JaegerLevel      bool    `json:"jaeger-level,omitempty"`
-	ClientUseBackoff bool    `json:"client-use-backoff,omitempty"`
-	AuthPrivateKey   *string `json:"auth-private-key,omitempty"`
-	AuthPublicKey    *string `json:"auth-public-key,omitempty"`
-	JaegerOutputDir  *string `json:"jaeger-output-dir,omitempty"`
-	LogFile          *string `json:"log-file,omitempty"`
-	LogRotate        *string `json:"log-rotate,omitempty"`
+	JaegerOffline    bool    `json:"JaegerOffline,omitempty"`
+	JaegerOnline     bool    `json:"JaegerOnline,omitempty"`
+	ClientUseBackoff bool    `json:"ClientUseBackoff,omitempty"`
+	JaegerLevel      *string `json:"JaegerLevel,omitempty"`
+	JaegerOutputDir  *string `json:"JaegerOutputDir,omitempty"`
+	LogFile          *string `json:"LogFile,omitempty"`
 
-	// +kubebuilder:validation:Enum=off;info;error;warn;trace;debug
-	LogLevel *string `json:"log-level,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	HeartbeatInterval *string `json:"heartbeat-interval,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	ServerWaitSyncedTimeout *string `json:"server-wait-synced-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	RetryTimeout *string `json:"retry-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	RpcTimeout *string `json:"rpc-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	BatchTimeout *string `json:"batch-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	ClientWaitSyncedTimeout *string `json:"client-wait-synced-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	ClientProposeTimeout *string `json:"client-propose-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	ClientInitialRetryTimeout *string `json:"client-initial-retry-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	ClientMaxRetryTimeout *string `json:"client-max-retry-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	GcInterval *string `json:"gc-interval,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	RangeRetryTimeout *string `json:"range-retry-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	CompactTimeout *string `json:"compact-timeout,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	SyncVictimsInterval *string `json:"sync-victims-interval,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	WatchProgressNotifyInterval *string `json:"watch-progress-notify-interval,omitempty"`
-	CurpDir                     *string `json:"curp-dir,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(us|ms|s|m|h|d)
-	CompactSleepInterval *string `json:"compact-sleep-interval,omitempty"`
-	// +kubebuilder:validation:Pattern=\d+(B|MB|GB)
-	BatchMaxSize *string `json:"batch-max-size,omitempty"`
+	// +kubebuilder:validation:Enum=never;hourly;daily
+	LogRotate *string `json:"LogRotate,omitempty"`
+
+	// +kubebuilder:validation:Enum=trace;debug;info;warn;error
+	LogLevel *string `json:"LogLevel,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms)
+	HeartbeatInterval *string `json:"HeartbeatInterval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(ms|s)
+	ServerWaitSyncedTimeout *string `json:"ServerWaitSyncedTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(ms|s)
+	RetryTimeout *string `json:"RetryTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	RpcTimeout *string `json:"RpcTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	BatchTimeout *string `json:"BatchTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	ClientWaitSyncedTimeout *string `json:"ClientWaitSyncedTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	ClientProposeTimeout *string `json:"ClientProposeTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	ClientInitialRetryTimeout *string `json:"ClientInitialRetryTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	ClientMaxRetryTimeout *string `json:"ClientMaxRetryTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	GcInterval *string `json:"GcInterval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	RangeRetryTimeout *string `json:"RangeRetryTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	CompactTimeout *string `json:"CompactTimeout,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	SyncVictimsInterval *string `json:"SyncVictimsInterval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	WatchProgressNotifyInterval *string `json:"WatchProgressNotifyInterval,omitempty"`
+	CurpDir                     *string `json:"CurpDir,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(us|ms|s)
+	CompactSleepInterval *string `json:"CompactSleepInterval,omitempty"`
+	// +kubebuilder:validation:Pattern=\d+(KB|MB|kb|mb)
+	BatchMaxSize *string `json:"BatchMaxSize,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	RetryCount int `json:"retry-count,omitempty"`
+	RetryCount int `json:"RetryCount,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	FollowerTimeoutTicks int `json:"follower-timeout-ticks,omitempty"`
+	FollowerTimeoutTicks int `json:"FollowerTimeoutTicks,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	CandidateTimeoutTicks int `json:"candidate-timeout-ticks,omitempty"`
+	CandidateTimeoutTicks int `json:"CandidateTimeoutTicks,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	LogEntriesCap int `json:"log-entries-cap,omitempty"`
+	LogEntriesCap int `json:"LogEntriesCap,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	CmdWorkers int `json:"cmd-workers,omitempty"`
+	CmdWorkers int `json:"CmdWorkers,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	CompactBatchSize int `json:"compact-batch-size,omitempty"`
+	CompactBatchSize int `json:"CompactBatchSize,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	Quota int `json:"quota,omitempty"`
+	Quota int `json:"Quota,omitempty"`
 }
 
 // ########################################
@@ -124,7 +124,7 @@ type XlineClusterSpec struct {
 
 	/// Xline container bootstrap arguments
 	/// Set additional arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
-	BootstrapArgs XlineArgs `json:"bootstrapArgs,omitempty"`
+	BootstrapArgs *XlineArgs `json:"config,omitempty"`
 
 	// ImagePullPolicy of Xline cluster Pods
 	// +optional
@@ -133,11 +133,29 @@ type XlineClusterSpec struct {
 	// The replicas of xline nodes
 	// +kubebuilder:validation:Minimum=3
 	Replicas int32 `json:"replicas"`
+
+	// The auth secret keys
+	AuthSecrets *XlineAuthSecret `json:"authSecret,omitempty"`
+
+	// K8s storage-class-name of the Xline storage
+	// Defaults to Kubernetes default storage class.
+	// +optional
+	StorageClassName *string `json:"storageClassName"`
+
+	// Defines the specification of resource cpu, mem, storage.
+	corev1.ResourceRequirements `json:",inline"`
 }
 
-func (s *XlineClusterSpec) BootArgs() []string {
+type XlineAuthSecret struct {
+	Name      *string `json:"name"`
+	MountPath *string `json:"mountPath"`
+	PubKey    *string `json:"pubKey"`
+	PriKey    *string `json:"priKey"`
+}
+
+func (s *XlineClusterSpec) BootArgs() map[string]string {
 	bytes, err := json.Marshal(s.BootstrapArgs)
-	args := make([]string, 0)
+	args := map[string]string{}
 	if err != nil {
 		return args
 	}
@@ -146,11 +164,7 @@ func (s *XlineClusterSpec) BootArgs() []string {
 		return args
 	}
 	for k, v := range data {
-		if bv, ok := v.(bool); ok && bv {
-			args = append(args, fmt.Sprintf("--%s", k))
-			continue
-		}
-		args = append(args, fmt.Sprintf("--%s", k), fmt.Sprintf("%v", v))
+		args[k] = fmt.Sprintf("%v", v)
 	}
 	return args
 }
@@ -166,6 +180,8 @@ type XlineClusterStatus struct {
 type XlineClusterOprStage string
 
 const (
+	StageXlineScriptCM    XlineClusterOprStage = "Xline/ScriptCM"
+	StageXlineConfigMap   XlineClusterOprStage = "Xline/ConfigMap"
 	StageXlineService     XlineClusterOprStage = "Xline/Service"
 	StageXlineStatefulSet XlineClusterOprStage = "Xline/Statefulset"
 	StageComplete         XlineClusterOprStage = "complete"

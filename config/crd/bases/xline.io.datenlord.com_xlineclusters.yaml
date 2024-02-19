@@ -35,107 +35,143 @@ spec:
           spec:
             description: XlineClusterSpec defines the desired state of XlineCluster
             properties:
-              bootstrapArgs:
+              authSecret:
+                description: The auth secret keys
+                properties:
+                  mountPath:
+                    type: string
+                  name:
+                    type: string
+                  priKey:
+                    type: string
+                  pubKey:
+                    type: string
+                required:
+                - mountPath
+                - name
+                - priKey
+                - pubKey
+                type: object
+              claims:
+                description: "Claims lists the names of resources, defined in spec.resourceClaims,
+                  that are used by this container. \n This is an alpha field and requires
+                  enabling the DynamicResourceAllocation feature gate. \n This field
+                  is immutable. It can only be set for containers."
+                items:
+                  description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                  properties:
+                    name:
+                      description: Name must match the name of one entry in pod.spec.resourceClaims
+                        of the Pod where this field is used. It makes that resource
+                        available inside a container.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              config:
                 description: / Xline container bootstrap arguments / Set additional
                   arguments except [`--name`, `--members`, `--storage-engine`, `--data-dir`]
                 properties:
-                  auth-private-key:
+                  BatchMaxSize:
+                    pattern: \d+(KB|MB|kb|mb)
                     type: string
-                  auth-public-key:
+                  BatchTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  batch-max-size:
-                    pattern: \d+(B|MB|GB)
-                    type: string
-                  batch-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
-                    type: string
-                  candidate-timeout-ticks:
+                  CandidateTimeoutTicks:
                     minimum: 1
                     type: integer
-                  client-initial-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  ClientInitialRetryTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  client-max-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  ClientMaxRetryTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  client-propose-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  ClientProposeTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  client-use-backoff:
+                  ClientUseBackoff:
                     type: boolean
-                  client-wait-synced-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  ClientWaitSyncedTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  cmd-workers:
+                  CmdWorkers:
                     minimum: 1
                     type: integer
-                  compact-batch-size:
+                  CompactBatchSize:
                     minimum: 1
                     type: integer
-                  compact-sleep-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  CompactSleepInterval:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  compact-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  CompactTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  curp-dir:
+                  CurpDir:
                     type: string
-                  follower-timeout-ticks:
+                  FollowerTimeoutTicks:
                     minimum: 1
                     type: integer
-                  gc-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  GcInterval:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  heartbeat-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  HeartbeatInterval:
+                    pattern: \d+(us|ms)
                     type: string
-                  jaeger-level:
+                  JaegerLevel:
+                    type: string
+                  JaegerOffline:
                     type: boolean
-                  jaeger-offline:
+                  JaegerOnline:
                     type: boolean
-                  jaeger-online:
-                    type: boolean
-                  jaeger-output-dir:
+                  JaegerOutputDir:
                     type: string
-                  log-entries-cap:
+                  LogEntriesCap:
                     minimum: 1
                     type: integer
-                  log-file:
+                  LogFile:
                     type: string
-                  log-level:
+                  LogLevel:
                     enum:
-                    - "off"
-                    - info
-                    - error
-                    - warn
                     - trace
                     - debug
+                    - info
+                    - warn
+                    - error
                     type: string
-                  log-rotate:
+                  LogRotate:
+                    enum:
+                    - never
+                    - hourly
+                    - daily
                     type: string
-                  quota:
+                  Quota:
                     minimum: 1
                     type: integer
-                  range-retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  RangeRetryTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  retry-count:
+                  RetryCount:
                     minimum: 1
                     type: integer
-                  retry-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  RetryTimeout:
+                    pattern: \d+(ms|s)
                     type: string
-                  rpc-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  RpcTimeout:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  server-wait-synced-timeout:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  ServerWaitSyncedTimeout:
+                    pattern: \d+(ms|s)
                     type: string
-                  sync-victims-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  SyncVictimsInterval:
+                    pattern: \d+(us|ms|s)
                     type: string
-                  watch-progress-notify-interval:
-                    pattern: \d+(us|ms|s|m|h|d)
+                  WatchProgressNotifyInterval:
+                    pattern: \d+(us|ms|s)
                     type: string
                 type: object
               image:
@@ -144,11 +180,37 @@ spec:
               imagePullPolicy:
                 description: ImagePullPolicy of Xline cluster Pods
                 type: string
+              limits:
+                additionalProperties:
+                  anyOf:
+                  - type: integer
+                  - type: string
+                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                  x-kubernetes-int-or-string: true
+                description: 'Limits describes the maximum amount of compute resources
+                  allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                type: object
               replicas:
                 description: The replicas of xline nodes
                 format: int32
                 minimum: 3
                 type: integer
+              requests:
+                additionalProperties:
+                  anyOf:
+                  - type: integer
+                  - type: string
+                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                  x-kubernetes-int-or-string: true
+                description: 'Requests describes the minimum amount of compute resources
+                  required. If Requests is omitted for a container, it defaults to
+                  Limits if that is explicitly specified, otherwise to an implementation-defined
+                  value. Requests cannot exceed Limits. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                type: object
+              storageClassName:
+                description: K8s storage-class-name of the Xline storage Defaults
+                  to Kubernetes default storage class.
+                type: string
             required:
             - replicas
             type: object

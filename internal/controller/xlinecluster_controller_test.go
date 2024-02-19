@@ -46,8 +46,6 @@ var _ = Describe("XlineCluster controller", func() {
 	const (
 		XlineClusterName      = "test-xline-cluster"
 		XlineClusterNamespace = "default"
-		XlineClusterStsName   = "test-xline-cluster-sts"
-		XlineClusterSvcName   = "test-xline-cluster-svc"
 
 		timeout  = time.Second * 10
 		duration = time.Second * 10
@@ -92,8 +90,8 @@ var _ = Describe("XlineCluster controller", func() {
 				Stage:          xapi.StageComplete,
 				StageStatus:    xapi.StageResultSucceeded,
 				Image:          image,
-				StatefulSetRef: xapi.NewNamespacedName(xlineNamespaceName(XlineClusterStsName, XlineClusterNamespace)),
-				ServiceRef:     xapi.NewNamespacedName(xlineNamespaceName(XlineClusterSvcName, XlineClusterNamespace)),
+				StatefulSetRef: xapi.NewNamespacedName(xlineNamespaceName(XlineClusterName, XlineClusterNamespace)),
+				ServiceRef:     xapi.NewNamespacedName(xlineNamespaceName(XlineClusterName, XlineClusterNamespace)),
 			}
 
 			Eventually(func() (ExpectClusterStatus, error) {
