@@ -120,6 +120,7 @@ func MakeStatefulSet(cr *xapi.XlineCluster, scheme *runtime.Scheme) *appv1.State
 
 	envs := []corev1.EnvVar{
 		{Name: "MEMBERS", Value: GetMemberTopology(cr)},
+		{Name: "NAMESPACE", Value: cr.Namespace},
 	}
 
 	volumes := []corev1.Volume{

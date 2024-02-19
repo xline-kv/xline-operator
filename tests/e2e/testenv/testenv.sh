@@ -21,7 +21,7 @@ function testenv::k8s::load_images() {
   popd
   testenv::k8s::kind::load_image "$OPERATOR_IMG"
 
-  remote_images=("phoenix500526/xline:v0.6.1" "ghcr.io/xline-kv/etcdctl:v3.5.9" "quay.io/brancz/kube-rbac-proxy:v0.15.0")
+  remote_images=("phoenix500526/xline:v0.7.0" "ghcr.io/xline-kv/etcdctl:v3.5.9" "quay.io/brancz/kube-rbac-proxy:v0.15.0")
   for img in "${remote_images[@]}"; do
     docker pull "$img" 2>/dev/null
     testenv::k8s::kind::load_image "$img"

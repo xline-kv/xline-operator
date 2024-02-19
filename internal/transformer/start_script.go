@@ -21,6 +21,31 @@ function process_cmd_args() {
 	echo $args
 }
 
+function resolve_domain() {
+	domain=$1
+	elapseTime=0
+	period=1
+	threshold=30
+	while true; do
+		sleep ${period}
+		elapseTime=$(( elapseTime+period ))
+
+		if [[ ${elapseTime} -ge ${threshold} ]]
+		then
+			echo "waiting for xline cluster ready timeout" >&2
+			exit 1
+		fi
+
+		if nslookup ${domain} 2>/dev/null
+		then
+			echo "nslookup domain ${domain}.svc success"
+			break
+		else
+			echo "nslookup domain ${domain} failed" >&2
+		fi
+	done
+}
+
 bool_envs=("JaegerOffline" "JaegerOnline" "ClientUseBackoff")
 number_envs=("RetryCount" "FollowerTimeoutTicks" "CandidateTimeoutTicks"
 			"LogEntriesCap" "CmdWorkers" "CompactBatchSize" "Quota")
@@ -32,6 +57,10 @@ unit_envs=("HeartbeatInterval" "ServerWaitSyncedTimeout" "RetryTimeout"
 enum_envs=("JaegerLevel" "LogRotate" "LogLevel")
 file_envs=("JaegerOutputDir" "LogFile" "CurpDir" "DataDir" "AuthPrivateKey" "AuthPublicKey")
 
+SERVICE_NAME=$(echo ${HOSTNAME} | sed 's/-[0-9]*$//')
+domain="${HOSTNAME}.${SERVICE_NAME}.${NAMESPACE}.svc.cluster.local:2379"
+resolve_domain ${domain}
+
 cmd="/usr/local/bin/xline --name $HOSTNAME --members $MEMBERS --storage-engine rocksdb --data-dir /usr/local/xline/data-dir"
 
 cmd="${cmd} \
@@ -41,6 +70,6 @@ cmd="${cmd} \
 		$(process_cmd_args enum_envs[@] false) \
 		$(process_cmd_args file_envs[@] false)"
 
-exec $cmd
+RUST_LOG=${LogLevel} exec $cmd
 `
 )
